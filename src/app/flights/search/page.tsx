@@ -7,157 +7,300 @@ import { supabase } from '@/lib/supabase/config';
 import type { Database } from '@/types/supabase';
 
 type Flight = Database['public']['Tables']['flights']['Row'];
+type FlightPrice = Database['public']['Tables']['flight_prices']['Row'];
+type SeatMap = Database['public']['Tables']['seat_map']['Row'];
 
 export default function FlightSearchPage() {
   const searchParams = useSearchParams();
-  const [flights, setFlights] = useState<Flight[]>([]);
+  const [outboundFlights, setOutboundFlights] = useState<{ flight: Flight; prices: FlightPrice[]; availableSeats: Record<string, number> }[]>([]);
+  const [returnFlights, setReturnFlights] = useState<{ flight: Flight; prices: FlightPrice[]; availableSeats: Record<string, number> }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRoundTrip] = useState(searchParams.get('returnDate') !== null);
 
   useEffect(() => {
-    const searchFlights = async () => {
+    const fetchFlights = async () => {
       try {
-        const origin = searchParams.get('origin');
-        const destination = searchParams.get('destination');
-        const departureDate = searchParams.get('departureDate');
-        const cabinClass = searchParams.get('cabinClass');
+        setLoading(true);
+        setError(null);
 
-        let query = supabase
-          .from('flights')
+        // Get outbound flights with prices
+const outboundSearchParams = {
+  from: searchParams.get('from'),
+  to: searchParams.get('to'),
+  departureDate: searchParams.get('departureDate')
+};
+
+if (!outboundSearchParams.from || !outboundSearchParams.to || !outboundSearchParams.departureDate) {
+  throw new Error('Missing required search parameters');
+}
+
+const { data: outboundData, error: outboundError } = await supabase
+  .from('flights')
+  .select('*, flight_prices(*)')
+  .eq('departure_airport', outboundSearchParams.from)
+  .eq('arrival_airport', outboundSearchParams.to)
+  // .gte('departure_time', new Date(outboundSearchParams.departureDate).toISOString())
+  // .lte('departure_time', new Date(outboundSearchParams.departureDate).toISOString())
+  .eq('status', 'scheduled')
+  .order('departure_time', { ascending: true })
+  .limit(10);
+
+if (outboundError) {
+  console.error('Error fetching outbound flights:', outboundError);
+  throw outboundError;
+}
+
+if (!outboundData || outboundData.length === 0) {
+  console.log('No outbound flights found');
+  return;
+}
+
+console.log('Fetched outbound flights:', outboundData.length);
+
+        // Get return flights if round trip
+        let returnData = [];
+        if (isRoundTrip) {
+          const { data: returnFlightsData, error: returnError } = await supabase
+            .from('flights')
+            .select('*, flight_prices(*)')
+            .eq('departure_airport', searchParams.get('to'))
+            .eq('arrival_airport', searchParams.get('from'))
+            // .gte('departure_time', searchParams.get('returnDate'))
+            // .lte('departure_time', searchParams.get('returnDate'))
+            .eq('status', 'scheduled');
+
+          if (returnError) throw returnError;
+          returnData = returnFlightsData || [];
+        }
+
+        // Get seat availability for all flights
+        const flightIds = [...(outboundData || []), ...(returnData || [])].map(flight => flight.id);
+        const { data: seatData, error: seatError } = await supabase
+          .from('seat_map')
           .select('*')
-          .eq('departure_airport', origin)
-          .eq('arrival_airport', destination)
-          .gte('departure_time', `${departureDate}T00:00:00`)
-          .lte('departure_time', `${departureDate}T23:59:59`)
-          .gt(`available_seats->>${cabinClass}`, 0);
+          .in('flight_id', flightIds)
+          .eq('is_available', true);
 
-        const { data, error } = await query;
+        if (seatError) throw seatError;
 
-        if (error) throw error;
-        setFlights(data || []);
-      } catch (err) {
-        console.error('Error searching flights:', err);
-        setError('Failed to load flights');
+        // Process seat data to create availability map
+        const seatAvailability = seatData.reduce((acc, seat) => {
+          if (!acc[seat.flight_id]) {
+            acc[seat.flight_id] = {
+              economy: 0,
+              premium_economy: 0,
+              business: 0,
+              first: 0
+            };
+          }
+          const cabinClass = seat.cabin_class.toLowerCase();
+          acc[seat.flight_id][cabinClass] += 1;
+          return acc;
+        }, {} as Record<string, { economy: number; premium_economy: number; business: number; first: number }>);
+
+        // Filter flights based on seat availability and cabin class
+        const outboundWithSeats = (outboundData || []).map(flight => ({
+          flight,
+          prices: flight.flight_prices || [],
+          availableSeats: seatAvailability[flight.id] || {
+            economy: 0,
+            premium_economy: 0,
+            business: 0,
+            first: 0
+          }
+        }));
+
+        const returnWithSeats = (returnData || []).map(flight => ({
+          flight,
+          prices: flight.flight_prices || [],
+          availableSeats: seatAvailability[flight.id] || {
+            economy: 0,
+            premium_economy: 0,
+            business: 0,
+            first: 0
+          }
+        }));
+
+        setOutboundFlights(outboundWithSeats);
+        setReturnFlights(returnWithSeats);
+      } catch (err:any) {
+        setError(err.message || 'Failed to fetch flights');
       } finally {
         setLoading(false);
       }
     };
 
-    if (searchParams.get('origin')) {
-      searchFlights();
-    }
+    fetchFlights();
   }, [searchParams]);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  if (loading) {
+    return (
+      <ProtectedLayout>
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          </div>
+        </div>
+      </ProtectedLayout>
+    );
+  }
 
-  const formatDuration = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
-  };
-
+  if (error) {
+    return (
+      <ProtectedLayout>
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-red-600">{error}</div>
+        </div>
+      </ProtectedLayout>
+    );
+  }
   return (
     <ProtectedLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="container mx-auto px-4 py-8">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Available Flights</h1>
           <p className="mt-1 text-sm text-gray-500">
-            {searchParams.get('origin')} → {searchParams.get('destination')} •{' '}
+            {searchParams.get('from')} → {searchParams.get('to')} •{' '}
             {new Date(searchParams.get('departureDate') || '').toLocaleDateString('en-US', {
               weekday: 'long',
               year: 'numeric',
               month: 'long',
-              day: 'numeric',
+              day: 'numeric'
             })}
           </p>
         </div>
-
-        {loading ? (
-          <div className="flex justify-center items-center min-h-[400px]">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-          </div>
-        ) : error ? (
-          <div className="bg-red-50 p-4 rounded-md">
-            <p className="text-sm text-red-700">{error}</p>
-          </div>
-        ) : flights.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500">No flights found for your search criteria</p>
-          </div>
+  
+        {outboundFlights.length === 0 ? (
+          <div className="text-gray-500">No outbound flights available for your search criteria.</div>
         ) : (
           <div className="space-y-4">
-            {flights.map((flight) => (
-              <div
-                key={flight.id}
-                className="bg-white shadow rounded-lg overflow-hidden hover:shadow-md transition-shadow"
-              >
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Outbound Flights</h2>
+            {outboundFlights.map((flightData) => {
+              const selectedClass = (searchParams.get('cabinClass') || 'economy').toLowerCase();
+              const price = flightData.prices.find(p => p.cabin_class.toLowerCase() === selectedClass)?.price || 0;
+              const availableSeats = flightData.availableSeats[selectedClass] || 0;
+  
+              return (
+                <div
+                  key={flightData.flight.id}
+                  className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex justify-between items-start">
                     <div>
-                      <p className="text-sm text-gray-500">{flight.airline}</p>
-                      <p className="text-xs text-gray-400">Flight {flight.flight_number}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-semibold text-gray-900">
-                        ${flight.price.toFixed(2)}
-                      </p>
-                      <p className="text-xs text-gray-500">per passenger</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex-1">
-                      <p className="text-lg font-semibold">{formatDate(flight.departure_time)}</p>
-                      <p className="text-sm text-gray-500">{flight.departure_airport}</p>
-                    </div>
-                    <div className="flex-1 text-center">
-                      <p className="text-sm text-gray-500">{formatDuration(flight.duration)}</p>
-                      <div className="relative">
-                        <div className="absolute inset-0 flex items-center">
-                          <div className="w-full border-t border-gray-300"></div>
-                        </div>
-                        <div className="relative flex justify-center">
-                          <span className="bg-white px-2 text-sm text-gray-500">Direct</span>
-                        </div>
+                      <div className="text-lg font-semibold text-gray-900">
+                        {flightData.flight.airline}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {flightData.flight.flight_number}
                       </div>
                     </div>
-                    <div className="flex-1 text-right">
-                      <p className="text-lg font-semibold">{formatDate(flight.arrival_time)}</p>
-                      <p className="text-sm text-gray-500">{flight.arrival_airport}</p>
+                    <div className="text-gray-500">
+                      {new Date(flightData.flight.departure_time).toLocaleTimeString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
                     </div>
                   </div>
-
-                  <div className="flex items-center justify-between border-t border-gray-200 pt-4">
+                  <div className="mt-4 flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-500">
-                        {flight.available_seats[searchParams.get('cabinClass') as keyof typeof flight.available_seats]} seats available in {searchParams.get('cabinClass')}
-                      </p>
+                      <div className="text-gray-600">From</div>
+                      <div className="font-medium">{flightData.flight.departure_airport}</div>
                     </div>
-                    <button
-                      onClick={() => {
-                        const bookingParams = new URLSearchParams({
-                          flightId: flight.id,
-                          ...Object.fromEntries(searchParams.entries()),
-                        });
-                        window.location.href = `/flights/book?${bookingParams.toString()}`;
-                      }}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      Select Flight
-                    </button>
+                    <div className="text-gray-400">→</div>
+                    <div>
+                      <div className="text-gray-600">To</div>
+                      <div className="font-medium">{flightData.flight.arrival_airport}</div>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <div className="text-sm text-gray-500">
+                      Duration: {Math.floor(flightData.flight.duration / 60)}h {flightData.flight.duration % 60}m
+                    </div>
+                  </div>
+                  <div className="mt-4 flex justify-between items-center">
+                    <div className="text-sm text-gray-500">
+                      Available seats in {selectedClass}:
+                      {availableSeats}
+                    </div>
+                    <div className="text-lg font-bold text-blue-600">
+                      ₹{price}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
+          </div>
+        )}
+  
+        {isRoundTrip && returnFlights.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Return Flights</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              {searchParams.get('to')} → {searchParams.get('from')} •{' '}
+              {new Date(searchParams.get('returnDate') || '').toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}
+            </p>
+            <div className="space-y-4">
+              {returnFlights.map((flightData) => {
+                const selectedClass = (searchParams.get('cabinClass') || 'economy').toLowerCase();
+                const price = flightData.prices.find(p => p.cabin_class.toLowerCase() === selectedClass)?.price || 0;
+                const availableSeats = flightData.availableSeats[selectedClass] || 0;
+  
+                return (
+                  <div
+                    key={flightData.flight.id}
+                    className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="text-lg font-semibold text-gray-900">
+                          {flightData.flight.airline}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {flightData.flight.flight_number}
+                        </div>
+                      </div>
+                      <div className="text-gray-500">
+                        {new Date(flightData.flight.departure_time).toLocaleTimeString('en-US', {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center justify-between">
+                      <div>
+                        <div className="text-gray-600">From</div>
+                        <div className="font-medium">{flightData.flight.departure_airport}</div>
+                      </div>
+                      <div className="text-gray-400">→</div>
+                      <div>
+                        <div className="text-gray-600">To</div>
+                        <div className="font-medium">{flightData.flight.arrival_airport}</div>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <div className="text-sm text-gray-500">
+                        Duration: {Math.floor(flightData.flight.duration / 60)}h {flightData.flight.duration % 60}m
+                      </div>
+                    </div>
+                    <div className="mt-4 flex justify-between items-center">
+                      <div className="text-sm text-gray-500">
+                        Available seats in {selectedClass}:
+                        {availableSeats}
+                      </div>
+                      <div className="text-lg font-bold text-blue-600">
+                        ₹{price}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

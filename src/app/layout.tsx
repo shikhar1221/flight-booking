@@ -22,7 +22,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full bg-gray-50">
+    <html lang="en" className="h-full bg-gray-100">
       <body className={`${geist.className} h-full antialiased`}>
         <Providers>
         <div className="min-h-full">

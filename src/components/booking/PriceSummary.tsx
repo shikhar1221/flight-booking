@@ -1,48 +1,109 @@
 import { FlightBookingData } from '@/types/booking';
-import { Loader2 } from 'lucide-react';
+import { Loader2, CreditCard, Shield, Info, Users } from 'lucide-react';
 
 interface PriceSummaryProps {
   bookFlight: FlightBookingData;
   cabinClass: string;
   isSubmitting: boolean;
   onSubmit: (e: React.FormEvent) => Promise<void>;
+  passengerCount: number;
 }
 
-export const PriceSummary = ({ bookFlight, cabinClass, isSubmitting, onSubmit }: PriceSummaryProps) => {
-  const basePrice = bookFlight.prices.find(
-    p => p.cabin_class.toLowerCase() === cabinClass?.toLowerCase()
-  )?.price || 0;
-  const taxAmount = basePrice * 0.18;
-  const totalAmount = basePrice * 1.18;
+export const PriceSummary = ({ 
+  bookFlight, 
+  cabinClass, 
+  isSubmitting, 
+  onSubmit,
+  passengerCount
+}: PriceSummaryProps) => {
+  const basePrice = bookFlight.flight[`${cabinClass}_price`] || 0;
+  const basePriceTotal = basePrice * passengerCount;
+  const taxAmount = basePriceTotal * 0.18; // 18% GST
+  const totalAmount = basePriceTotal + taxAmount;
+  const loyaltyPoints = Math.floor(totalAmount * 0.1); // 10% of total as loyalty points
 
   return (
     <div className="mt-8 border-t border-gray-200 pt-6">
-      <div className="bg-gray-50 rounded-lg p-4 mb-6">
-        <div className="flex justify-between mb-2">
-          <span className="text-gray-600">Base fare</span>
-          <span className="font-medium">₹{basePrice.toLocaleString('en-IN')}</span>
+      {/* Price Breakdown */}
+      <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Price Summary</h3>
+        
+        {/* Passenger Count */}
+        <div className="flex items-center space-x-2 text-sm text-gray-600 mb-4">
+          <Users className="h-4 w-4" />
+          <span>{passengerCount} Passenger{passengerCount > 1 ? 's' : ''}</span>
         </div>
-        <div className="flex justify-between mb-2">
-          <span className="text-gray-600">Taxes & fees</span>
-          <span className="font-medium">₹{taxAmount.toLocaleString('en-IN')}</span>
+
+        {/* Base Fare Section */}
+        <div className="space-y-3 mb-4">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-600">Base fare (per passenger)</span>
+            <span className="font-medium text-blue-900">
+              ₹{basePrice.toLocaleString('en-IN')}
+            </span>
+          </div>
+
+          {passengerCount > 1 && (
+            <div className="flex justify-between items-center pl-4 text-sm text-gray-500">
+              <span>× {passengerCount} passengers</span>
+              <span>₹{basePriceTotal.toLocaleString('en-IN')}</span>
+            </div>
+          )}
         </div>
-        <div className="border-t border-gray-200 my-2"></div>
-        <div className="flex justify-between text-lg font-semibold">
-          <span>Total Amount</span>
-          <span className="text-primary">₹{totalAmount.toLocaleString('en-IN')}</span>
+
+        {/* Taxes Section */}
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center space-x-2">
+            <span className="text-gray-600">Taxes & fees (18% GST)</span>
+            <Info className="h-4 w-4 text-gray-400" />
+          </div>
+          <span className="font-medium text-blue-900">₹{taxAmount.toLocaleString('en-IN')}</span>
+        </div>
+
+        <div className="border-t border-gray-200 my-4"></div>
+
+        {/* Total Amount */}
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-lg font-semibold text-blue-950">Total Amount</span>
+          <span className="text-xl font-bold text-blue-950">₹{totalAmount.toLocaleString('en-IN')}</span>
+        </div>
+
+        {/* Per Passenger Average */}
+        {passengerCount > 1 && (
+          <div className="text-sm text-gray-500 flex items-center justify-end mb-2">
+            <span>
+              ₹{Math.round(totalAmount / passengerCount).toLocaleString('en-IN')} per passenger
+            </span>
+          </div>
+        )}
+
+        {/* Loyalty Points */}
+        <div className="text-sm text-gray-500 flex items-center justify-end space-x-1">
+          <span>You'll earn</span>
+          <span className="font-semibold text-green-600">{loyaltyPoints}</span>
+          <span>loyalty points</span>
         </div>
       </div>
 
-      <div className="flex flex-col space-y-4">
-      <button
+      {/* Payment Section */}
+      <div className="mt-6 space-y-4">
+        {/* Security Badge */}
+        <div className="flex items-center justify-center space-x-2 text-sm text-gray-500 mb-4">
+          <Shield className="h-4 w-4" />
+          <span>Secure payment powered by Stripe</span>
+        </div>
+
+        {/* Submit Button */}
+        <button
           type="submit"
           disabled={isSubmitting}
-          className="relative w-full bg-blue-600 text-white rounded-lg px-6 py-4 font-medium 
-            transform transition-all duration-200 
-            hover:bg-blue-700 hover:shadow-lg hover:-translate-y-0.5
+          className="relative w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl 
+            px-6 py-4 font-medium transform transition-all duration-200 
+            hover:from-blue-700 hover:to-blue-800 hover:shadow-lg hover:-translate-y-0.5
             active:translate-y-0 active:shadow-md
             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 
-            disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+            disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 
+            disabled:hover:shadow-none group"
         >
           <div className="flex items-center justify-center space-x-2">
             {isSubmitting ? (
@@ -52,19 +113,25 @@ export const PriceSummary = ({ bookFlight, cabinClass, isSubmitting, onSubmit }:
               </>
             ) : (
               <>
+                <CreditCard className="h-5 w-5 group-hover:scale-110 transition-transform" />
                 <span className="text-lg">Confirm & Pay</span>
                 <span className="text-sm opacity-90">₹{totalAmount.toLocaleString('en-IN')}</span>
               </>
             )}
           </div>
-          <div className="absolute inset-x-0 h-1 bottom-0 rounded-b-lg bg-black/10"></div>
+          <div className="absolute inset-x-0 h-1 bottom-0 rounded-b-xl bg-black/10"></div>
         </button>
-        
+
+        {/* Terms and Privacy */}
         <p className="text-center text-sm text-gray-500">
           By clicking "Confirm & Pay", you agree to our{' '}
-          <a href="/terms" className="text-primary hover:underline">Terms & Conditions</a>
+          <a href="/terms" className="text-blue-600 hover:text-blue-700 hover:underline">
+            Terms & Conditions
+          </a>
           {' '}and{' '}
-          <a href="/privacy" className="text-primary hover:underline">Privacy Policy</a>
+          <a href="/privacy" className="text-blue-600 hover:text-blue-700 hover:underline">
+            Privacy Policy
+          </a>
         </p>
       </div>
     </div>

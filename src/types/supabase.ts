@@ -22,6 +22,19 @@ export interface Database {
           status: 'ON_TIME' | 'DELAYED' | 'BOARDING' | 'DEPARTED' | 'CANCELLED'
           created_at: string
           updated_at: string
+          // New columns for seats and prices
+          economy_seats: number
+          premium_economy_seats: number
+          business_seats: number
+          first_seats: number
+          economy_available_seats: number
+          premium_economy_available_seats: number
+          business_available_seats: number
+          first_available_seats: number
+          economy_price: number
+          premium_economy_price: number
+          business_price: number
+          first_price: number
         }
         Insert: {
           id?: string
@@ -35,6 +48,19 @@ export interface Database {
           status?: 'ON_TIME' | 'DELAYED' | 'BOARDING' | 'DEPARTED' | 'CANCELLED'
           created_at?: string
           updated_at?: string
+          // New columns for seats and prices
+          economy_seats?: number
+          premium_economy_seats?: number
+          business_seats?: number
+          first_seats?: number
+          economy_available_seats?: number
+          premium_economy_available_seats?: number
+          business_available_seats?: number
+          first_available_seats?: number
+          economy_price?: number
+          premium_economy_price?: number
+          business_price?: number
+          first_price?: number
         }
         Update: {
           id?: string
@@ -48,6 +74,19 @@ export interface Database {
           status?: 'ON_TIME' | 'DELAYED' | 'BOARDING' | 'DEPARTED' | 'CANCELLED'
           created_at?: string
           updated_at?: string
+          // New columns for seats and prices
+          economy_seats?: number
+          premium_economy_seats?: number
+          business_seats?: number
+          first_seats?: number
+          economy_available_seats?: number
+          premium_economy_available_seats?: number
+          business_available_seats?: number
+          first_available_seats?: number
+          economy_price?: number
+          premium_economy_price?: number
+          business_price?: number
+          first_price?: number
         }
       }
       flight_prices: {
@@ -220,8 +259,6 @@ export interface Database {
           loyalty_tier?: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
         }
       }
-
-      // Passengers table (normalized)
       passengers: {
         Row: {
           id: string;

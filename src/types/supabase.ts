@@ -136,7 +136,7 @@ export interface Database {
           updated_at?: string
         }
       }
-      profiles: {
+      users: {
         Row: {
           id: string
           email: string

@@ -1,3 +1,4 @@
+// frontend/src/components/layout/Navbar.tsx
 'use client';
 
 import Link from 'next/link';
@@ -18,7 +19,7 @@ export function Navbar() {
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               <Link
-                href="/"
+                href="/flights/search"
                 className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
               >
                 Search Flights
@@ -29,23 +30,33 @@ export function Navbar() {
               >
                 My Bookings
               </Link>
+              {user && (
+                <Link
+                  href="/profile"
+                  className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  Profile
+                </Link>
+              )}
             </div>
           </div>
-          <div className="hidden sm:ml-6 sm:flex sm:items-center">
-            <div className="ml-3 relative flex items-center space-x-4">
-              <Link
-                href="/profile"
-                className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
-              >
-                Profile
-              </Link>
+
+          <div className="flex items-center">
+            {user ? (
               <button
-                onClick={() => signOut()}
-                className="text-gray-500 hover:text-gray-700 px-3 py-2 rounded-md text-sm font-medium"
+                onClick={signOut}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
               >
                 Sign Out
               </button>
-            </div>
+            ) : (
+              <Link
+                href="/auth"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
+              >
+                Sign In
+              </Link>
+            )}
           </div>
         </div>
       </div>

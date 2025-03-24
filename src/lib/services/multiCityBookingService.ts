@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../supabase/config';
 import { Database } from '../../types/supabase';
-import { emailService } from './emailService';
+import  emailService  from './emailService';
 
 type Flight = Database['public']['Tables']['flights']['Row'];
 type Booking = Database['public']['Tables']['bookings']['Row'];

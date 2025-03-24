@@ -9,7 +9,10 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, full_name: string,
+    phone_number: string,
+    country:string,
+    state:string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -48,12 +51,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
-  const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-    if (error) throw error;
+  const signUp = async (
+    email: string,
+    password: string,
+    full_name: string,
+    mobile_number: string,
+    country: string,
+    state: string
+  ):Promise<void> => {
+    setLoading(true);
+  
+    try {
+      // First, create the user with Supabase
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+  
+      if (authError) throw authError;
+  
+      // Then, create the user profile in the database
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert([
+          {
+            id: authData.user?.id,
+            full_name,
+            email,
+            mobile_number,
+            country,
+            state,
+            loyalty_points: 0,
+            role: 'user',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ]);
+  
+      if (profileError) throw profileError;
+
+    } catch (error) {
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const signOut = async () => {

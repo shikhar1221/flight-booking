@@ -19,16 +19,9 @@ export interface Database {
           departure_time: string
           arrival_time: string
           duration: number
-          price: number
-          available_seats: {
-            Economy: number
-            'Premium Economy': number
-            Business: number
-            First: number
-          }
+          status: 'ON_TIME' | 'DELAYED' | 'BOARDING' | 'DEPARTED' | 'CANCELLED'
           created_at: string
           updated_at: string
-          status: 'ON_TIME' | 'DELAYED' | 'BOARDING' | 'DEPARTED' | 'ARRIVED' | 'CANCELLED'
         }
         Insert: {
           id?: string
@@ -39,13 +32,7 @@ export interface Database {
           departure_time: string
           arrival_time: string
           duration: number
-          price: number
-          available_seats: {
-            Economy: number
-            'Premium Economy': number
-            Business: number
-            First: number
-          }
+          status?: 'ON_TIME' | 'DELAYED' | 'BOARDING' | 'DEPARTED' | 'CANCELLED'
           created_at?: string
           updated_at?: string
         }
@@ -58,80 +45,65 @@ export interface Database {
           departure_time?: string
           arrival_time?: string
           duration?: number
-          price?: number
-          available_seats?: {
-            Economy: number
-            'Premium Economy': number
-            Business: number
-            First: number
-          }
+          status?: 'ON_TIME' | 'DELAYED' | 'BOARDING' | 'DEPARTED' | 'CANCELLED'
           created_at?: string
           updated_at?: string
         }
       }
-      bookings: {
+      flight_prices: {
         Row: {
           id: string
-          user_id: string
           flight_id: string
-          passengers: {
-            type: 'adult' | 'child' | 'infant'
-            first_name: string
-            last_name: string
-            date_of_birth: string
-            passport_number?: string
-            special_requirements?: string
-          }[]
-          status: 'confirmed' | 'pending' | 'cancelled'
-          multi_city_group_id?: string
-          multi_city_sequence?: number
-          booking_type: 'one-way' | 'round-trip' | 'multi-city'
-          is_outbound: boolean
-          related_booking_id?: string
-          total_price: number
-          cabin_class: string
+          cabin_class: 'Economy' | 'Premium Economy' | 'Business' | 'First'
+          price: number
+          effective_date: string
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
-          user_id: string
           flight_id: string
-          passengers: {
-            type: 'adult' | 'child' | 'infant'
-            first_name: string
-            last_name: string
-            date_of_birth: string
-            passport_number?: string
-            special_requirements?: string
-          }[]
-          status?: 'confirmed' | 'pending' | 'cancelled'
-          booking_type: 'one-way' | 'round-trip' | 'multi-city'
-          is_outbound: boolean
-          related_booking_id?: string
-          total_price: number
-          cabin_class: string
+          cabin_class: 'Economy' | 'Premium Economy' | 'Business' | 'First'
+          price: number
+          effective_date: string
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
-          user_id?: string
           flight_id?: string
-          passengers?: {
-            type: 'adult' | 'child' | 'infant'
-            first_name: string
-            last_name: string
-            date_of_birth: string
-            passport_number?: string
-            special_requirements?: string
-          }[]
-          status?: 'confirmed' | 'pending' | 'cancelled'
-          booking_type?: 'one-way' | 'round-trip'
-          is_outbound?: boolean
-          related_booking_id?: string
-          total_price?: number
-          cabin_class?: string
+          cabin_class?: 'Economy' | 'Premium Economy' | 'Business' | 'First'
+          price?: number
+          effective_date?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      seat_map: {
+        Row: {
+          id: string
+          flight_id: string
+          seat_number: string
+          cabin_class: 'Economy' | 'Premium Economy' | 'Business' | 'First'
+          is_available: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          flight_id: string
+          seat_number: string
+          cabin_class: 'Economy' | 'Premium Economy' | 'Business' | 'First'
+          is_available: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          flight_id?: string
+          seat_number?: string
+          cabin_class?: 'Economy' | 'Premium Economy' | 'Business' | 'First'
+          is_available?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -140,27 +112,27 @@ export interface Database {
         Row: {
           id: string
           email: string
-          first_name: string
-          last_name: string
-          phone_number?: string
-          address?: string
-          date_of_birth?: string
-          passport_number?: string
-          nationality?: string
+          password: string
+          full_name: string
+          phone_number: string
+          address: string
+          date_of_birth: string
+          passport_number: string
+          nationality: string
           loyalty_points: number
           created_at: string
           updated_at: string
         }
         Insert: {
-          id: string
+          id?: string
           email: string
-          first_name: string
-          last_name: string
-          phone_number?: string
-          address?: string
-          date_of_birth?: string
-          passport_number?: string
-          nationality?: string
+          password: string
+          full_name: string
+          phone_number: string
+          address: string
+          date_of_birth: string
+          passport_number: string
+          nationality: string
           loyalty_points?: number
           created_at?: string
           updated_at?: string
@@ -168,8 +140,8 @@ export interface Database {
         Update: {
           id?: string
           email?: string
-          first_name?: string
-          last_name?: string
+          password?: string
+          full_name?: string
           phone_number?: string
           address?: string
           date_of_birth?: string

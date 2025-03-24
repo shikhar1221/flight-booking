@@ -2,10 +2,9 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
-import { useAuth } from '@/contexts/AuthContext';
 import { Header } from "@/components/layout/Header";
-import { ProtectedLayout } from "@/components/layout/ProtectedLayout";
 import { Navbar } from '@/components/layout/Navbar';
+import { Toaster } from "@/components/ui/toaster";
 
 const geist = Geist({
   subsets: ["latin"],
@@ -37,6 +36,7 @@ export default function RootLayout({
           </div>
         </div>
         </Providers>
+        <Toaster />
       </body>
     </html>
   );

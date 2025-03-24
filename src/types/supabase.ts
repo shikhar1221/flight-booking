@@ -152,6 +152,105 @@ export interface Database {
           updated_at?: string
         }
       }
+      bookings: {
+        Row: {
+          id: string;
+          user_id: string;
+          flight_id: string;
+          booking_type: 'one-way' | 'round-trip' | 'multi-city';
+          is_outbound: boolean;
+          related_booking_id: string | null;
+          multi_city_group_id: string | null;
+          multi_city_sequence: number | null;
+          passengers: {
+            name: string;
+            type: 'adult' | 'child' | 'infant';
+            seat_number: string;
+            fare: number;
+          }[];
+          total_price: number;
+          status: 'pending' | 'confirmed' | 'cancelled';
+          created_at: string;
+          updated_at: string;
+          loyalty_points_earned: number;
+          loyalty_tier: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
+        }
+        Insert: {
+          id?: string;
+          user_id: string;
+          flight_id: string;
+          booking_type: 'one-way' | 'round-trip' | 'multi-city';
+          is_outbound?: boolean;
+          related_booking_id?: string;
+          multi_city_group_id?: string;
+          multi_city_sequence?: number;
+          passengers: {
+            name: string;
+            type: 'adult' | 'child' | 'infant';
+            seat_number: string;
+            fare: number;
+          }[];
+          total_price: number;
+          status?: 'pending' | 'confirmed' | 'cancelled';
+          created_at?: string;
+          updated_at?: string;
+          loyalty_points_earned?: number;
+          loyalty_tier?: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
+        }
+        Update: {
+          id?: string;
+          user_id?: string;
+          flight_id?: string;
+          booking_type?: 'one-way' | 'round-trip' | 'multi-city';
+          is_outbound?: boolean;
+          related_booking_id?: string;
+          multi_city_group_id?: string;
+          multi_city_sequence?: number;
+          passengers?: {
+            name: string;
+            type: 'adult' | 'child' | 'infant';
+            seat_number: string;
+            fare: number;
+          }[];
+          total_price?: number;
+          status?: 'pending' | 'confirmed' | 'cancelled';
+          created_at?: string;
+          updated_at?: string;
+          loyalty_points_earned?: number;
+          loyalty_tier?: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
+        }
+      }
+
+      // Passengers table (normalized)
+      passengers: {
+        Row: {
+          id: string;
+          booking_id: string;
+          name: string;
+          type: 'adult' | 'child' | 'infant';
+          seat_number: string;
+          fare: number;
+          created_at: string;
+        }
+        Insert: {
+          id?: string;
+          booking_id: string;
+          name: string;
+          type: 'adult' | 'child' | 'infant';
+          seat_number: string;
+          fare: number;
+          created_at?: string;
+        }
+        Update: {
+          id?: string;
+          booking_id?: string;
+          name?: string;
+          type?: 'adult' | 'child' | 'infant';
+          seat_number?: string;
+          fare?: number;
+          created_at?: string;
+        }
+      }
     }
     Views: {
       [_ in never]: never

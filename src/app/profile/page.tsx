@@ -9,6 +9,8 @@ export default function ProfilePage() {
   const { user, loading } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedProfile, setEditedProfile] = useState<any>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -27,9 +29,50 @@ export default function ProfilePage() {
 
       if (error) throw error;
       setProfile(data);
+      setEditedProfile(data); // Initialize edited profile with current data
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load profile');
     }
+  };
+
+  const handleEdit = () => {
+    setIsEditing(true);
+    setEditedProfile(profile);
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setEditedProfile(profile);
+  };
+
+  const handleSave = async () => {
+    try {
+      if (!user || !editedProfile) return;
+
+      const { error } = await supabase
+        .from('users')
+        .update({
+          full_name: editedProfile.full_name,
+          mobile_number: editedProfile.mobile_number,
+          country: editedProfile.country,
+          state: editedProfile.state
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setProfile(editedProfile);
+      setIsEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save profile');
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEditedProfile((prev: any) => ({
+      ...prev,
+      [e.target.name]: e.target.value
+    }));
   };
 
   if (loading) {
@@ -66,32 +109,119 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div className="bg-white shadow-lg rounded-lg overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-50 to-white p-6">
-          <div className="flex items-center space-x-4">
-            <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center">
-              <span className="text-2xl font-bold text-blue-600">
-                {profile?.full_name?.[0] || 'U'}
-              </span>
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto">
+        <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-50 to-white p-8">
+            <div className="flex items-center space-x-6">
+              <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center">
+                <span className="text-3xl font-bold text-blue-600">
+                  {profile?.full_name?.[0] || 'U'}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-3xl font-bold text-gray-900 truncate">
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      name="full_name"
+                      value={editedProfile?.full_name || ''}
+                      onChange={handleChange}
+                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-3"
+                      placeholder="Full Name"
+                    />
+                  ) : (
+                    profile?.full_name
+                  )}
+                </h1>
+                <p className="mt-1 text-sm text-gray-500 truncate">
+                  {user.email}
+                </p>
+                <p className="mt-2 text-sm text-gray-500">
+                  Loyalty Points: {profile?.loyalty_points}
+                </p>
+                <p className="mt-1 text-sm text-gray-500">
+                  Role: {profile?.role}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                {profile?.full_name}
-              </h1>
-              <p className="text-gray-600">{user.email}</p>
-              <p className="text-gray-600 mt-2">
-                Mobile: {profile?.mobile_number}
-              </p>
-              <p className="text-gray-600 mt-2">
-                Location: {profile?.country}, {profile?.state}
-              </p>
-              <p className="text-gray-600 mt-2">
-                Loyalty Points: {profile?.loyalty_points}
-              </p>
-              <p className="text-gray-600 mt-2">
-                Role: {profile?.role}
-              </p>
+          </div>
+  
+          <div className="p-8 border-t">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Mobile Number
+                </label>
+                {isEditing ? (
+                  <input
+                    type="tel"
+                    name="mobile_number"
+                    value={editedProfile?.mobile_number || ''}
+                    onChange={handleChange}
+                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-3"
+                    placeholder="Enter mobile number"
+                  />
+                ) : (
+                  <p className="text-gray-900">{profile?.mobile_number}</p>
+                )}
+              </div>
+  
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Location
+                </label>
+                {isEditing ? (
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      name="country"
+                      value={editedProfile?.country || ''}
+                      onChange={handleChange}
+                      className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-3"
+                      placeholder="Country"
+                    />
+                    <input
+                      type="text"
+                      name="state"
+                      value={editedProfile?.state || ''}
+                      onChange={handleChange}
+                      className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-3"
+                      placeholder="State"
+                    />
+                  </div>
+                ) : (
+                  <p className="text-gray-900">
+                    {profile?.country}, {profile?.state}
+                  </p>
+                )}
+              </div>
+            </div>
+  
+            <div className="mt-8">
+              {isEditing ? (
+                <div className="flex justify-end space-x-4">
+                  <button
+                    onClick={handleCancel}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleEdit}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Edit Profile
+                </button>
+              )}
             </div>
           </div>
         </div>

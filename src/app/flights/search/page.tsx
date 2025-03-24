@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { ProtectedLayout } from '@/components/layout/ProtectedLayout';
 import { supabase } from '@/lib/supabase/config';
 import type { Database } from '@/types/supabase';
+import { FlightCard } from '@/components/flights/FlightCard';
 
 type Flight = Database['public']['Tables']['flights']['Row'];
 type FlightPrice = Database['public']['Tables']['flight_prices']['Row'];
@@ -17,6 +18,7 @@ export default function FlightSearchPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRoundTrip] = useState(searchParams.get('returnDate') !== null);
+  const [sortBy, setSortBy] = useState<'departure' | 'price' | 'duration'>('departure');
 
   useEffect(() => {
     const fetchFlights = async () => {
@@ -158,9 +160,26 @@ console.log('Fetched outbound flights:', outboundData.length);
   return (
     <ProtectedLayout>
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Available Flights</h1>
-          <p className="mt-1 text-sm text-gray-500">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold text-gray-900">Available Flights</h1>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-500">Sort by:</span>
+                <select 
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                  className="px-3 py-1.5 rounded-md border border-gray-200 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="departure">Departure Time</option>
+                  <option value="price">Price</option>
+                  <option value="duration">Duration</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div className="mt-2 text-sm text-gray-500">
             {searchParams.get('from')} → {searchParams.get('to')} •{' '}
             {new Date(searchParams.get('departureDate') || '').toLocaleDateString('en-US', {
               weekday: 'long',
@@ -168,141 +187,44 @@ console.log('Fetched outbound flights:', outboundData.length);
               month: 'long',
               day: 'numeric'
             })}
-          </p>
-        </div>
-  
-        {outboundFlights.length === 0 ? (
-          <div className="text-gray-500">No outbound flights available for your search criteria.</div>
-        ) : (
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Outbound Flights</h2>
-            {outboundFlights.map((flightData) => {
-              const selectedClass = (searchParams.get('cabinClass') || 'economy').toLowerCase();
-              const price = flightData.prices.find(p => p.cabin_class.toLowerCase() === selectedClass)?.price || 0;
-              const availableSeats = flightData.availableSeats[selectedClass] || 0;
-  
-              return (
-                <div
-                  key={flightData.flight.id}
-                  className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="text-lg font-semibold text-gray-900">
-                        {flightData.flight.airline}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {flightData.flight.flight_number}
-                      </div>
-                    </div>
-                    <div className="text-gray-500">
-                      {new Date(flightData.flight.departure_time).toLocaleTimeString('en-US', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center justify-between">
-                    <div>
-                      <div className="text-gray-600">From</div>
-                      <div className="font-medium">{flightData.flight.departure_airport}</div>
-                    </div>
-                    <div className="text-gray-400">→</div>
-                    <div>
-                      <div className="text-gray-600">To</div>
-                      <div className="font-medium">{flightData.flight.arrival_airport}</div>
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <div className="text-sm text-gray-500">
-                      Duration: {Math.floor(flightData.flight.duration / 60)}h {flightData.flight.duration % 60}m
-                    </div>
-                  </div>
-                  <div className="mt-4 flex justify-between items-center">
-                    <div className="text-sm text-gray-500">
-                      Available seats in {selectedClass}:
-                      {availableSeats}
-                    </div>
-                    <div className="text-lg font-bold text-blue-600">
-                      ₹{price}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
           </div>
-        )}
-  
-        {isRoundTrip && returnFlights.length > 0 && (
-          <div className="mt-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Return Flights</h2>
-            <p className="text-sm text-gray-500 mb-4">
-              {searchParams.get('to')} → {searchParams.get('from')} •{' '}
-              {new Date(searchParams.get('returnDate') || '').toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })}
-            </p>
-            <div className="space-y-4">
-              {returnFlights.map((flightData) => {
-                const selectedClass = (searchParams.get('cabinClass') || 'economy').toLowerCase();
-                const price = flightData.prices.find(p => p.cabin_class.toLowerCase() === selectedClass)?.price || 0;
-                const availableSeats = flightData.availableSeats[selectedClass] || 0;
-  
-                return (
-                  <div
-                    key={flightData.flight.id}
-                    className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="text-lg font-semibold text-gray-900">
-                          {flightData.flight.airline}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {flightData.flight.flight_number}
-                        </div>
-                      </div>
-                      <div className="text-gray-500">
-                        {new Date(flightData.flight.departure_time).toLocaleTimeString('en-US', {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </div>
-                    </div>
-                    <div className="mt-4 flex items-center justify-between">
-                      <div>
-                        <div className="text-gray-600">From</div>
-                        <div className="font-medium">{flightData.flight.departure_airport}</div>
-                      </div>
-                      <div className="text-gray-400">→</div>
-                      <div>
-                        <div className="text-gray-600">To</div>
-                        <div className="font-medium">{flightData.flight.arrival_airport}</div>
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <div className="text-sm text-gray-500">
-                        Duration: {Math.floor(flightData.flight.duration / 60)}h {flightData.flight.duration % 60}m
-                      </div>
-                    </div>
-                    <div className="mt-4 flex justify-between items-center">
-                      <div className="text-sm text-gray-500">
-                        Available seats in {selectedClass}:
-                        {availableSeats}
-                      </div>
-                      <div className="text-lg font-bold text-blue-600">
-                        ₹{price}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+        </div>
+
+        {/* Flight Grid */}
+        <div className="space-y-8">
+          {/* Outbound Flights */}
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Outbound Flights</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {outboundFlights.map((flightData) => (
+                <FlightCard
+                  key={flightData.flight.id}
+                  flight={flightData.flight}
+                  prices={flightData.prices}
+                  availableSeats={flightData.availableSeats}
+                />
+              ))}
             </div>
           </div>
-        )}
+
+          {/* Return Flights */}
+          {isRoundTrip && returnFlights.length > 0 && (
+            <div className="mt-12">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Return Flights</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {returnFlights.map((flightData) => (
+                  <FlightCard
+                    key={flightData.flight.id}
+                    flight={flightData.flight}
+                    prices={flightData.prices}
+                    availableSeats={flightData.availableSeats}
+                    isReturn={true}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </ProtectedLayout>
   );

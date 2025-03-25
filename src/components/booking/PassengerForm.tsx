@@ -175,14 +175,6 @@ export function PassengerForm({ flightId, cabinClass, passengerCount }: Passenge
             <p>{bookingError}</p>
           </div>
         )}
-
-        <PriceSummary
-          bookFlight={bookFlight}
-          cabinClass={cabinClass.toString()}
-          isSubmitting={isSubmitting}
-          onSubmit={handleSubmit}
-          passengerCount={passengerCount}
-        />
       </form>
     </div>
   );

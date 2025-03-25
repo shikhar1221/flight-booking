@@ -86,7 +86,7 @@ export const FlightDetailsCard = ({ bookFlight, getCabinClass, price }: FlightDe
           </div>
           <div className="flex items-center space-x-2 text-gray-600">
             <Clock className="h-4 w-4" />
-            <span className="font-medium">{formatDuration(bookFlight.flight.duration)}</span>
+            <span className="font-medium">{formatDuration(bookFlight.flight.duration.toString())}</span>
           </div>
         </div>
 

@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
-import { BookingWithFlight } from '@/app/bookings/page';
+import { BookingWithFlight } from '@/app/bookings/ClientBookings';
 
 interface BookingCardProps {
   booking: BookingWithFlight;

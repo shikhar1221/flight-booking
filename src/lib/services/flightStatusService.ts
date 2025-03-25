@@ -1,9 +1,14 @@
-type FlightStatus = 'ON_TIME' | 'DELAYED' | 'BOARDING' | 'DEPARTED' | 'ARRIVED' | 'CANCELLED';
+export type FlightStatus = 'ON_TIME' | 'DELAYED' | 'BOARDING' | 'DEPARTED' | 'ARRIVED' | 'CANCELLED';
 
-interface FlightStatusUpdate {
+export interface FlightStatusUpdate {
   flightId: string;
   status: FlightStatus;
   updatedAt: string;
+}
+
+export interface FormattedStatus {
+  text: string;
+  color: string;
 }
 
 type StatusUpdateCallback = (update: FlightStatusUpdate) => void;
@@ -68,19 +73,19 @@ class FlightStatusService {
     }
   }
 
-  // Helper method to format status for display
-  static formatStatus(status: FlightStatus): { text: string; color: string } {
+  // Format flight status for display
+  formatStatus(status: FlightStatus): FormattedStatus {
     switch (status) {
       case 'ON_TIME':
         return { text: 'On Time', color: 'text-green-600' };
       case 'DELAYED':
-        return { text: 'Delayed', color: 'text-yellow-600' };
+        return { text: 'Delayed', color: 'text-amber-600' };
       case 'BOARDING':
         return { text: 'Boarding', color: 'text-blue-600' };
       case 'DEPARTED':
         return { text: 'Departed', color: 'text-purple-600' };
       case 'ARRIVED':
-        return { text: 'Arrived', color: 'text-green-700' };
+        return { text: 'Arrived', color: 'text-green-600' };
       case 'CANCELLED':
         return { text: 'Cancelled', color: 'text-red-600' };
       default:

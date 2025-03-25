@@ -1,26 +1,44 @@
 import { FlightBookingData } from '@/types/booking';
+import { CabinClass } from '@/types/flight';
 import { Loader2, CreditCard, Shield, Info, Users } from 'lucide-react';
+
+type DbCabinClass = 'economy' | 'premium_economy' | 'business' | 'first';
 
 interface PriceSummaryProps {
   bookFlight: FlightBookingData;
   cabinClass: string;
   isSubmitting: boolean;
+  basePrice:number;
   onSubmit: (e: React.FormEvent) => Promise<void>;
   passengerCount: number;
 }
 
+const cabinClassToDbField = (cabinClass: CabinClass): DbCabinClass => {
+  switch (cabinClass) {
+    case 'Premium Economy':
+      return 'premium_economy';
+    case 'Economy':
+      return 'economy';
+    case 'Business':
+      return 'business';
+    case 'First':
+      return 'first';
+  }
+};
+
 export const PriceSummary = ({ 
-  bookFlight, 
+  bookFlight,
+  basePrice,
   cabinClass, 
   isSubmitting, 
   onSubmit,
   passengerCount
 }: PriceSummaryProps) => {
-  const basePrice = bookFlight.flight[`${cabinClass}_price`] || 0;
-  const basePriceTotal = basePrice * passengerCount;
-  const taxAmount = basePriceTotal * 0.18; // 18% GST
-  const totalAmount = basePriceTotal + taxAmount;
-  const loyaltyPoints = Math.floor(totalAmount * 0.1); // 10% of total as loyalty points
+  const dbCabinClass = cabinClassToDbField(cabinClass as CabinClass);
+  const basePriceTotal: number = basePrice * passengerCount;
+  const taxAmount: number = basePriceTotal * 0.18; // 18% GST
+  const totalAmount: number = basePriceTotal + taxAmount;
+  const loyaltyPoints: number = Math.floor(totalAmount * 0.1); // 10% of total as loyalty points
 
   return (
     <div className="mt-8 border-t border-gray-200 pt-6">

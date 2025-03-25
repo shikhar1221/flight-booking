@@ -78,7 +78,6 @@ From: ${flight.departure_airport}
 To: ${flight.arrival_airport}
 Departure: ${new Date(flight.departure_time).toLocaleString()}
 Arrival: ${new Date(flight.arrival_time).toLocaleString()}
-Cabin Class: ${booking.cabin_class}
 
 PASSENGER DETAILS
 ----------------
@@ -121,24 +120,24 @@ Thank you for choosing our service!
       if (bookingError) throw bookingError;
 
       // Update available seats
-      const { error: flightError } = await supabase
-        .from('flights')
-        .update({
-          available_seats: {
-            ...flight.available_seats,
-            [booking.cabin_class]: flight.available_seats[booking.cabin_class as keyof typeof flight.available_seats] + booking.passengers.length,
-          },
-        })
-        .eq('id', flight.id);
+      // const { error: flightError } = await supabase
+      //   .from('flights')
+      //   .update({
+      //     available_seats: {
+      //       ...flight.available_seats,
+      //       [booking.cabin_class]: flight.available_seats[booking.cabin_class as keyof typeof flight.available_seats] + booking.passengers.length,
+      //     },
+      //   })
+      //   .eq('id', flight.id);
 
-      if (flightError) throw flightError;
+      // if (flightError) throw flightError;
 
       // Send cancellation email
       await EmailService.sendBookingCancellation(
         user.email!,
         booking.id,
         flight.flight_number,
-        booking.passengers[0].first_name + ' ' + booking.passengers[0].last_name
+        booking.passengers[0].name
       );
 
       // Refresh booking data
@@ -225,10 +224,6 @@ Thank you for choosing our service!
                       <p className="font-medium">
                         {new Date(flight.arrival_time).toLocaleString()}
                       </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Cabin Class</p>
-                      <p className="font-medium">{booking.cabin_class}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">Total Price</p>

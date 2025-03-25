@@ -19,14 +19,14 @@ type FieldConfigs = {
 
 interface PassengerFormFieldProps {
   field: keyof PassengerDetails;
-  value: string;
+  value: string | undefined;
   error?: string;
   onChange: (value: string) => void;
 }
 
 export const PassengerFormField = ({ 
   field, 
-  value, 
+  value = '', // Provide default empty string
   error, 
   onChange 
 }: PassengerFormFieldProps) => {

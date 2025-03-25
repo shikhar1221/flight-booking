@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../supabase/config';
 import { Database } from '../../types/supabase';
-import  emailService  from './emailService';
+import  EmailService  from './emailService';
 
 type Flight = Database['public']['Tables']['flights']['Row'];
 type Booking = Database['public']['Tables']['bookings']['Row'];
@@ -28,7 +28,7 @@ class MultiCityBookingService {
       // Start a Supabase transaction
       const { data: bookings, error } = await supabase.rpc('create_multi_city_booking', {
         p_user_id: userId,
-        p_flight_ids: flights.map(f => f.id),
+        p_flight_ids: flights.map((f: Flight) => f.id),
         p_passengers: passengers,
         p_cabin_class: cabinClass,
         p_multi_city_group_id: uuidv4()
@@ -39,22 +39,24 @@ class MultiCityBookingService {
       // Send email confirmation for multi-city booking
       const userResponse = await supabase
         .from('profiles')
-        .select('email')
+        .select('email, first_name, last_name')
         .eq('id', userId)
         .single();
 
       if (userResponse.error) throw userResponse.error;
 
-      // Send email confirmation
-      await emailService.sendBookingConfirmation({
-        to: userResponse.data.email,
-        bookingIds: bookings.map(b => b.id),
-        flightNumbers: flights.map(f => f.flight_number),
-        passengerName: `${passengers[0].first_name} ${passengers[0].last_name}`,
-        departureAirports: flights.map(f => f.departure_airport),
-        arrivalAirports: flights.map(f => f.arrival_airport),
-        departureTimes: flights.map(f => f.departure_time)
-      });
+      // Send email confirmation with all required parameters
+      await EmailService.sendBookingConfirmation(
+        userResponse.data.email,
+        bookings.map((b: Booking) => b.id).join(', '),
+        flights.map((f: Flight) => f.flight_number).join(', '),
+        `${userResponse.data.first_name} ${userResponse.data.last_name}`,
+        flights.map((f: Flight) => f.departure_airport).join(', '),
+        flights.map((f: Flight) => f.arrival_airport).join(', '),
+        flights.map((f: Flight) => new Date(f.departure_time).toLocaleString()).join(', '),
+        cabinClass,
+        passengers.length.toString()
+      );
 
       return bookings;
     } catch (error) {
@@ -88,7 +90,9 @@ class MultiCityBookingService {
       // Check seat availability for all flights
       const totalPassengers = input.passengers.length;
       for (const flight of input.flights) {
-        const availableSeats = flight.available_seats[input.cabinClass as keyof typeof flight.available_seats];
+        const seatsKey = `${input.cabinClass.toLowerCase()}_available_seats` as keyof Flight;
+        const availableSeats = flight[seatsKey] as number;
+        
         if (availableSeats < totalPassengers) {
           errors.push(`Not enough seats available on flight ${flight.flight_number}`);
         }
@@ -103,7 +107,7 @@ class MultiCityBookingService {
 
         // Validate passport for international flights
         const hasInternationalFlight = input.flights.some(
-          flight => flight.departure_airport.slice(-2) !== flight.arrival_airport.slice(-2)
+          (flight: Flight) => flight.departure_airport.slice(-2) !== flight.arrival_airport.slice(-2)
         );
         if (hasInternationalFlight && !passenger.passport_number) {
           errors.push('Passport number required for international flights');

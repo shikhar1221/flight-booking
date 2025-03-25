@@ -1,32 +1,56 @@
 import { FlightBookingData } from '@/types/booking';
 import { Plane, Clock, Calendar, MapPin, Tag } from 'lucide-react';
 import { format } from 'date-fns';
+import { CabinClass } from '@/types/flight';
+
 
 interface FlightDetailsCardProps {
   bookFlight: FlightBookingData;
-  cabinClass: 'economy' | 'premium_economy' | 'business' | 'first';
+  getCabinClass: CabinClass;
+  price:number;
 }
+type DbCabinClass = 'economy' | 'premium_economy' | 'business' | 'first';
 
-export const FlightDetailsCard = ({ bookFlight, cabinClass }: FlightDetailsCardProps) => {
-  const formatCabinClass = (cabinClass: string) => {
-    return cabinClass
-      .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  };
+
+const cabinClassToDbField = (cabinClass: CabinClass): DbCabinClass => {
+  switch (cabinClass) {
+    case 'Premium Economy':
+      return 'premium_economy';
+    case 'Economy':
+      return 'economy';
+    case 'Business':
+      return 'business';
+    case 'First':
+      return 'first';
+  }
+};
+
+export const FlightDetailsCard = ({ bookFlight, getCabinClass, price }: FlightDetailsCardProps) => {
+  const cabinClass= cabinClassToDbField(getCabinClass);
 
   const getPrice = () => {
-    const priceField = `${cabinClass}_price` as keyof typeof bookFlight.flight;
-    return bookFlight.flight[priceField] || 0;
+    return price;
   };
 
   const formatDuration = (duration: string) => {
+    // Split the time string into hours, minutes, seconds
     const [hours, minutes] = duration.split(':');
-    return `${parseInt(hours)}h ${parseInt(minutes)}m`;
+    
+    // Convert to numbers and format
+    const h = parseInt(hours, 10);
+    const m = parseInt(minutes, 10);
+    
+    return `${h}h ${m}m`;
   };
+
 
   const getFlightDate = (dateString: string) => {
     return format(new Date(dateString), 'EEE, MMM d');
+  };
+
+  const getAvailableSeats = () => {
+    const seatKey = `${cabinClass}_available_seats` as keyof typeof bookFlight.flight;
+    return bookFlight.flight[seatKey] || 0;
   };
 
   return (
@@ -49,7 +73,7 @@ export const FlightDetailsCard = ({ bookFlight, cabinClass }: FlightDetailsCardP
           </div>
         </div>
         <div className="mt-4 inline-flex items-center px-3 py-1 rounded-full bg-blue-500 text-sm font-medium">
-          {formatCabinClass(cabinClass)}
+          {getCabinClass}
         </div>
       </div>
 
@@ -113,10 +137,10 @@ export const FlightDetailsCard = ({ bookFlight, cabinClass }: FlightDetailsCardP
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-2 text-gray-600">
               <Tag className="h-4 w-4" />
-              <span>Available seats in {formatCabinClass(cabinClass)}:</span>
+              <span>Available seats in {getCabinClass}:</span>
             </div>
             <span className="text-lg font-bold text-black bg-gray-100 px-2 py-1 rounded-full">
-              {bookFlight.flight[`${cabinClass}_available_seats`] || 0}
+              {getAvailableSeats()}
             </span>
           </div>
         </div>

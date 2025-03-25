@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
-import { flightStatusService } from '@/lib/services/flightStatusService';
+import { flightStatusService, FlightStatus } from '@/lib/services/flightStatusService';
 
 interface FlightStatusUpdatesProps {
   flightId: string;
-  initialStatus?: string;
+  initialStatus?: FlightStatus;
   className?: string;
 }
 
-export default function FlightStatusUpdates({ flightId, initialStatus, className = '' }: FlightStatusUpdatesProps) {
-  const [status, setStatus] = useState(initialStatus || 'ON_TIME');
+export default function FlightStatusUpdates({ 
+  flightId, 
+  initialStatus = 'ON_TIME', 
+  className = '' 
+}: FlightStatusUpdatesProps) {
+  const [status, setStatus] = useState<FlightStatus>(initialStatus);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 

@@ -2,6 +2,7 @@ import { Database } from '../../types/supabase';
 import { supabase } from '../supabase/config';
 
 type Flight = Database['public']['Tables']['flights']['Row'];
+type CabinClass = 'economy' | 'premium_economy' | 'business' | 'first';
 
 interface RecommendationCriteria {
   origin: string;
@@ -9,7 +10,9 @@ interface RecommendationCriteria {
   preferredDate: Date;
   maxPriceDifference?: number;
   maxDateDifference?: number;
-  cabinClass: string;
+  cabinClass: CabinClass;
+  preferredAirlines?: string[];
+  maxDuration?: number;
   passengers: {
     adults: number;
     children: number;
@@ -18,10 +21,9 @@ interface RecommendationCriteria {
 }
 
 interface RecommendationReason {
-  type: 'BETTER_PRICE' | 'BETTER_TIME' | 'ALTERNATIVE_DATE' | 'LOYALTY_POINTS';
+  type: 'BETTER_PRICE' | 'BETTER_TIME' | 'ALTERNATIVE_DATE' | 'PREFERRED_AIRLINE';
   description: string;
   savingsAmount?: number;
-  pointsEarned?: number;
 }
 
 interface FlightRecommendation {
@@ -31,6 +33,15 @@ interface FlightRecommendation {
 }
 
 class FlightRecommendationService {
+  private getFlightPrice(flight: Flight, cabinClass: CabinClass): number {
+    const priceKey = `${cabinClass}_price` as keyof Flight;
+    return flight[priceKey] as number || 0;
+  }
+
+  private getAvailableSeats(flight: Flight, cabinClass: CabinClass): number {
+    const seatsKey = `${cabinClass}_available_seats` as keyof Flight;
+    return flight[seatsKey] as number || 0;
+  }
   private async fetchAlternativeFlights(criteria: RecommendationCriteria): Promise<Flight[]> {
     const dateRange = criteria.maxDateDifference || 3; // Default to 3 days
     const startDate = new Date(criteria.preferredDate);
@@ -50,15 +61,19 @@ class FlightRecommendationService {
     return flights || [];
   }
 
+
   private calculateScore(flight: Flight, criteria: RecommendationCriteria, reasons: RecommendationReason[]): number {
     let score = 0;
 
     // Base score starts at 100
     score = 100;
 
+    // Get price for the selected cabin class
+    const flightPrice = this.getFlightPrice(flight, criteria.cabinClass);
+
     // Price factor (0-40 points)
-    const maxPrice = criteria.maxPriceDifference || flight.price * 0.2; // Default to 20% price difference
-    const priceDifference = flight.price - criteria.maxPriceDifference!;
+    const maxPrice = criteria.maxPriceDifference || flightPrice * 0.2; // Default to 20% price difference
+    const priceDifference = flightPrice - (criteria.maxPriceDifference || 0);
     if (priceDifference < 0) {
       score += Math.min(40, Math.abs(priceDifference / maxPrice) * 40);
       reasons.push({
@@ -94,14 +109,28 @@ class FlightRecommendationService {
       });
     }
 
-    // Loyalty points factor (0-10 points)
-    const pointsEarned = Math.floor(flight.price * 0.1); // Example: 10% of price as points
-    score += 10;
-    reasons.push({
-      type: 'LOYALTY_POINTS',
-      description: `Earn ${pointsEarned} loyalty points`,
-      pointsEarned
-    });
+    // Airline preference factor (0-10 points)
+    if (criteria.preferredAirlines?.includes(flight.airline)) {
+      score += 10;
+      reasons.push({
+        type: 'PREFERRED_AIRLINE',
+        description: `Preferred airline: ${flight.airline}`
+      });
+    }
+
+    // Duration factor (0-10 points)
+    if (criteria.maxDuration && flight.duration < criteria.maxDuration) {
+      const durationDifference = criteria.maxDuration - flight.duration;
+      const durationScore = Math.min(10, (durationDifference / criteria.maxDuration) * 10);
+      score += durationScore;
+      if (durationScore > 0) {
+        reasons.push({
+          type: 'BETTER_TIME',
+          description: `Shorter flight duration by ${Math.floor(durationDifference / 60)} hours ${durationDifference % 60} minutes`
+        });
+      }
+    }
+
 
     return score;
   }
@@ -114,7 +143,7 @@ class FlightRecommendationService {
       for (const flight of flights) {
         // Check if flight has enough seats
         const totalPassengers = criteria.passengers.adults + criteria.passengers.children + criteria.passengers.infants;
-        const availableSeats = flight.available_seats[criteria.cabinClass as keyof typeof flight.available_seats];
+        const availableSeats = this.getAvailableSeats(flight, criteria.cabinClass);
 
         if (availableSeats >= totalPassengers) {
           const reasons: RecommendationReason[] = [];

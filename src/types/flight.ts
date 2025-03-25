@@ -50,3 +50,21 @@ export interface PassengerInfo {
 }
 
 export type BookingStatus = 'confirmed' | 'pending' | 'cancelled';
+
+export interface FlightSearchResult {
+  id?: string;
+  flights: Flight[];
+  timestamp: number;
+  searchParams: {
+    origin: string;
+    destination: string;
+    departureDate: string;
+    returnDate?: string;
+    passengers: {
+      adults: number;
+      children: number;
+      infants: number;
+    };
+    cabinClass: CabinClass;
+  };
+}

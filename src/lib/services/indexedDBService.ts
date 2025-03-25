@@ -1,128 +1,128 @@
-import { Database } from '../../types/supabase';
+import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { Flight, FlightSearchResult, CabinClass, SearchFilters } from '@/types/flight';
+
+// Create a type that omits isRoundTrip from SearchFilters
+type SearchParams = Omit<SearchFilters, 'isRoundTrip'>;
 
 const DB_NAME = 'flightBookingSystem';
 const DB_VERSION = 1;
 
-interface FlightSearchResult {
-  flights: Database['public']['Tables']['flights']['Row'][];
-  timestamp: number;
-  searchParams: {
-    origin: string;
-    destination: string;
-    departureDate: string;
-    returnDate?: string;
-    passengers: {
-      adults: number;
-      children: number;
-      infants: number;
+interface FlightBookingDB extends DBSchema {
+  flightSearchResults: {
+    key: string;
+    value: FlightSearchResult;
+    indexes: {
+      'by-timestamp': number;
+      'by-origin': string;
+      'by-destination': string;
     };
-    cabinClass: string;
   };
 }
 
 class IndexedDBService {
-  private db: IDBDatabase | null = null;
+   dbPromise: Promise<IDBPDatabase<FlightBookingDB>>;
 
-  async initDB(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
+  constructor() {
+    this.dbPromise = this.initDB();
+  }
 
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        this.db = request.result;
-        resolve();
-      };
-
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        
-        // Create stores
+  private async initDB(): Promise<IDBPDatabase<FlightBookingDB>> {
+    return openDB<FlightBookingDB>(DB_NAME, DB_VERSION, {
+      upgrade(db) {
         if (!db.objectStoreNames.contains('flightSearchResults')) {
-          const store = db.createObjectStore('flightSearchResults', { keyPath: 'id', autoIncrement: true });
-          store.createIndex('timestamp', 'timestamp');
-          store.createIndex('origin', 'searchParams.origin');
-          store.createIndex('destination', 'searchParams.destination');
+          const store = db.createObjectStore('flightSearchResults', {
+            keyPath: 'id'
+          });
+          
+          // Create indexes
+          store.createIndex('by-timestamp', 'timestamp');
+          store.createIndex('by-origin', 'searchParams.origin');
+          store.createIndex('by-destination', 'searchParams.destination');
         }
-      };
+      },
     });
   }
 
-  async cacheFlightSearchResults(results: FlightSearchResult): Promise<void> {
-    if (!this.db) await this.initDB();
-
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['flightSearchResults'], 'readwrite');
-      const store = transaction.objectStore('flightSearchResults');
-
-      const request = store.add({
+  async cacheFlightSearchResults(results: Omit<FlightSearchResult, 'id'>): Promise<string> {
+    try {
+      const db = await this.dbPromise;
+      const id = crypto.randomUUID();
+      await db.add('flightSearchResults', {
         ...results,
+        id,
         timestamp: Date.now()
       });
-
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
+      return id;
+    } catch (error) {
+      console.error('Error caching flight search results:', error);
+      throw error;
+    }
   }
 
-  async getFlightSearchResults(params: Partial<FlightSearchResult['searchParams']>): Promise<FlightSearchResult | null> {
-    if (!this.db) await this.initDB();
+  async getFlightSearchResults(
+    params: Partial<SearchParams>
+  ): Promise<FlightSearchResult | null> {
+    try {
+      const db = await this.dbPromise;
+      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000; // 24 hours cache
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['flightSearchResults'], 'readonly');
-      const store = transaction.objectStore('flightSearchResults');
-      const index = store.index('timestamp');
+      // Get all results sorted by timestamp in descending order
+      const results = await db.getAllFromIndex(
+        'flightSearchResults',
+        'by-timestamp'
+      );
 
-      const request = index.openCursor(null, 'prev');
-      
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (cursor) {
-          const result = cursor.value as FlightSearchResult;
-          const isMatch = Object.entries(params).every(([key, value]) => {
-            const searchParamValue = result.searchParams[key as keyof typeof params];
+      // Find the first matching result that isn't expired
+      const matchingResult = results
+        .reverse()
+        .find(result => {
+          const isNotExpired = result.timestamp >= oneDayAgo;
+          const paramsMatch = Object.entries(params).every(([key, value]) => {
+            const searchParamValue = result.searchParams[key as keyof SearchParams];
             return JSON.stringify(searchParamValue) === JSON.stringify(value);
           });
+          return isNotExpired && paramsMatch;
+        });
 
-          if (isMatch && Date.now() - result.timestamp < 24 * 60 * 60 * 1000) { // 24 hours cache
-            resolve(result);
-          } else {
-            cursor.continue();
-          }
-        } else {
-          resolve(null);
-        }
-      };
-
-      request.onerror = () => reject(request.error);
-    });
+      return matchingResult || null;
+    } catch (error) {
+      console.error('Error getting flight search results:', error);
+      throw error;
+    }
   }
 
   async clearOldCache(): Promise<void> {
-    if (!this.db) await this.initDB();
-
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['flightSearchResults'], 'readwrite');
-      const store = transaction.objectStore('flightSearchResults');
-      const index = store.index('timestamp');
-
-      const request = index.openCursor();
+    try {
+      const db = await this.dbPromise;
+      const tx = db.transaction('flightSearchResults', 'readwrite');
+      const store = tx.objectStore('flightSearchResults');
       const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
 
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (cursor) {
-          const result = cursor.value as FlightSearchResult;
-          if (result.timestamp < oneDayAgo) {
-            store.delete(cursor.primaryKey);
-          }
-          cursor.continue();
-        } else {
-          resolve();
+      let cursor = await store.openCursor();
+      
+      while (cursor) {
+        if (cursor.value.timestamp < oneDayAgo) {
+          await cursor.delete();
         }
-      };
+        cursor = await cursor.continue();
+      }
 
-      request.onerror = () => reject(request.error);
-    });
+      await tx.done;
+    } catch (error) {
+      console.error('Error clearing old cache:', error);
+      throw error;
+    }
+  }
+
+  // Helper method to get all cached searches (useful for debugging)
+  async getAllCachedSearches(): Promise<FlightSearchResult[]> {
+    try {
+      const db = await this.dbPromise;
+      return await db.getAll('flightSearchResults');
+    } catch (error) {
+      console.error('Error getting all cached searches:', error);
+      throw error;
+    }
   }
 }
 

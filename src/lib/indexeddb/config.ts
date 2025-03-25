@@ -1,10 +1,8 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { Database } from '@/types/supabase';
 
-// Define types for better type safety
-export type CabinClass = 'economy' | 'premium_economy' | 'business' | 'first';
-export type BookingStatus = 'draft' | 'pending' | 'confirmed' | 'cancelled';
-export type PaymentStatus = 'pending' | 'completed' | 'failed';
-export type PassengerType = 'adult' | 'child' | 'infant';
+type Flight = Database['public']['Tables']['flights']['Row'];
+type Booking = Database['public']['Tables']['bookings']['Row'];
 
 export interface SearchParams {
   origin: string;
@@ -16,86 +14,35 @@ export interface SearchParams {
     children: number;
     infants: number;
   };
-  cabinClass: CabinClass;
+  cabinClass: 'Economy' | 'Premium Economy' | 'Business' | 'First';
 }
 
-export interface FlightResult {
+export interface CacheEntry {
   id: string;
-  airline: string;
-  flight_number: string;
-  departure_time: string;
-  arrival_time: string;
-  departure_airport: string;
-  arrival_airport: string;
-  duration: string;
-  economy_available_seats: number;
-  premium_economy_available_seats: number;
-  business_available_seats: number;
-  first_available_seats: number;
-  economy_price: number;
-  premium_economy_price: number;
-  business_price: number;
-  first_price: number;
-}
-
-export interface PassengerDetails {
-  type: PassengerType;
-  title: string;
-  firstName: string;
-  lastName: string;
-  dateOfBirth: string;
-  nationality: string;
-  passportNumber?: string;
-  passportExpiry?: string;
-}
-
-export interface ContactDetails {
-  email: string;
-  phone: string;
-  emergencyContact: {
-    name: string;
-    phone: string;
-    relationship: string;
-  };
-}
-
-export interface BookingData {
-  passengersDetails: PassengerDetails[];
-  contactDetails: ContactDetails;
-  selectedSeats?: string[];
-  cabinClass: CabinClass;
-  totalPrice: number;
-  paymentStatus: PaymentStatus;
+  searchParams: SearchParams;
+  results: Flight[];
+  timestamp: number;
+  expiresAt: number;
 }
 
 interface FlightBookingDB extends DBSchema {
   flights: {
     key: string;
-    value: {
-      id: string;
-      searchParams: SearchParams;
-      results: FlightResult[];
-      timestamp: number;
-      expiresAt: number; // TTL for cache invalidation
-    };
-    indexes: { 
+    value: CacheEntry;
+    indexes: {
       'by-timestamp': number;
+      'by-origin': string;
+      'by-destination': string;
       'by-expiry': number;
     };
   };
   bookings: {
     key: string;
     value: {
-      id: string;
-      flightId: string;
-      userId: string;
-      bookingReference: string;
-      status: BookingStatus;
-      data: BookingData;
-      createdAt: number;
-      updatedAt: number;
+      booking: Booking;
+      timestamp: number;
     };
-    indexes: { 
+    indexes: {
       'by-user': string;
       'by-status': string;
       'by-reference': string;
@@ -104,50 +51,42 @@ interface FlightBookingDB extends DBSchema {
 }
 
 const DB_NAME = 'flight-booking-system';
-const DB_VERSION = 2; // Incremented version for schema updates
+const DB_VERSION = 3; // Incremented version for schema updates
 
 export async function initDB(): Promise<IDBPDatabase<FlightBookingDB>> {
   try {
     return openDB<FlightBookingDB>(DB_NAME, DB_VERSION, {
-      upgrade(db: IDBPDatabase<FlightBookingDB>, oldVersion: number, newVersion: number | null) {
+      upgrade(db: IDBPDatabase<FlightBookingDB>, oldVersion: number) {
         // Create or update flights store
         if (!db.objectStoreNames.contains('flights')) {
-          // Create the store first
           const flightStore = db.createObjectStore('flights', { keyPath: 'id' });
-          // Then safely create indexes
           flightStore.createIndex('by-timestamp', 'timestamp');
           flightStore.createIndex('by-expiry', 'expiresAt');
-        } else if (oldVersion < 2) {
-          // Handle upgrade for existing store
-          // const flightStore = db.transaction('flights', 'readwrite')
-          //   .objectStore('flights');
-
-          // Check if index exists before creating
-          // if (!flightStore.indexNames.contains('by-expiry')) {
-          //   flightStore.createIndex('by-expiry', 'expiresAt');
+          flightStore.createIndex('by-origin', 'searchParams.origin');
+          flightStore.createIndex('by-destination', 'searchParams.destination');
+        } else if (oldVersion < 3) {
+          const tx = db.transaction('flights', 'readwrite');
+          const flightStore = tx.objectStore('flights');
+          
+          // Add new indexes if they don't exist
+          // if (!flightStore.indexNames.contains('by-origin')) {
+          //   flightStore.createIndex('by-origin', 'searchParams.origin');
+          // }
+          // if (!flightStore.indexNames.contains('by-destination')) {
+          //   flightStore.createIndex('by-destination', 'searchParams.destination');
           // }
         }
 
         // Create or update bookings store
         if (!db.objectStoreNames.contains('bookings')) {
-          // Create the store first
-          const bookingStore = db.createObjectStore('bookings', { keyPath: 'id' });
-          // Then safely create indexes
-          bookingStore.createIndex('by-user', 'userId');
-          bookingStore.createIndex('by-status', 'status');
-          bookingStore.createIndex('by-reference', 'bookingReference');
-        } else if (oldVersion < 2) {
-          // Handle upgrade for existing store
-          // const bookingStore = db.transaction('bookings', 'readwrite')
-          //   .objectStore('bookings');
-
-          // Check if indexes exist before creating
-          // if (!bookingStore.indexNames.contains('by-status')) {
-          //   bookingStore.createIndex('by-status', 'status');
-          // }
-          // if (!bookingStore.indexNames.contains('by-reference')) {
-          //   bookingStore.createIndex('by-reference', 'bookingReference');
-          // }
+          const bookingStore = db.createObjectStore('bookings', { keyPath: 'booking.id' });
+          bookingStore.createIndex('by-user', 'booking.user_id');
+          bookingStore.createIndex('by-status', 'booking.status');
+          bookingStore.createIndex('by-reference', 'booking.reference');
+        } else if (oldVersion < 3) {
+          // Handle migration of existing data if needed
+          // This would require more complex logic to transform existing data
+          // to the new schema format
         }
       },
     });
@@ -171,8 +110,37 @@ export async function clearExpiredFlights(db: IDBPDatabase<FlightBookingDB>): Pr
     
     await Promise.all(expiredFlights.map(flight => store.delete(flight.id)));
     await tx.done;
+    
+    console.log(`Cleared ${expiredFlights.length} expired flight cache entries`);
   } catch (error) {
     console.error('Error clearing expired flights:', error);
+    throw error;
+  }
+}
+
+/**
+ * Helper function to get cached flight results by origin and destination
+ */
+export async function getCachedFlightsByRoute(
+  db: IDBPDatabase<FlightBookingDB>, 
+  origin: string, 
+  destination: string
+): Promise<CacheEntry[]> {
+  try {
+    const tx = db.transaction('flights', 'readonly');
+    const store = tx.objectStore('flights');
+    const originIndex = store.index('by-origin');
+    
+    // Get all flights from the origin
+    const originFlights = await originIndex.getAll(origin);
+    
+    // Filter for the destination
+    return originFlights.filter(flight => 
+      flight.searchParams.destination === destination &&
+      flight.expiresAt > Date.now() // Only return non-expired results
+    );
+  } catch (error) {
+    console.error('Error getting cached flights by route:', error);
     throw error;
   }
 }

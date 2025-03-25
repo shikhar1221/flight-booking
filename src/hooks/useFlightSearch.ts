@@ -1,95 +1,169 @@
-'use client';
-
-import { useState, useCallback, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/lib/supabase/config';
 import type { Database } from '@/types/supabase';
-import { flightService, type SearchParams } from '@/lib/indexeddb/flightService';
+import { useFlightCache } from '@/hooks/useIndexedDB';
+
+type Flight = Database['public']['Tables']['flights']['Row'];
+type FlightPrice = Database['public']['Tables']['flight_prices']['Row'];
+type SeatMap = Database['public']['Tables']['seat_map']['Row'];
+
+export type FlightData = {
+  flight: Flight;
+  prices: FlightPrice[];
+  availableSeats: Record<string, number>;
+};
+
+interface SearchParams {
+  from: string | null;
+  to: string | null;
+  departureDate: string | null;
+  isRoundTrip: boolean;
+}
 
 export function useFlightSearch() {
-  const [loading, setLoading] = useState(false);
+  const [outboundFlights, setOutboundFlights] = useState<FlightData[]>([]);
+  const [returnFlights, setReturnFlights] = useState<FlightData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<Database['public']['Tables']['flights']['Row'][]>([]);
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const { isReady, cacheFlights, getCachedFlights } = useFlightCache();
 
-  // Listen for online/offline status changes
-  useEffect(() => {
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
+  const processSeatData = (seatData: SeatMap[]) => {
+    return seatData.reduce((acc, seat) => {
+      if (!acc[seat.flight_id]) {
+        acc[seat.flight_id] = getEmptySeatMap();
+      }
+      const cabinClass = seat.cabin_class.toLowerCase();
+      acc[seat.flight_id][cabinClass] += 1;
+      return acc;
+    }, {} as Record<string, Record<string, number>>);
+  };
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+  const getEmptySeatMap = () => ({
+    economy: 0,
+    premium_economy: 0,
+    business: 0,
+    first: 0
+  });
 
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  const searchFlights = useCallback(async (params: SearchParams) => {
-    setLoading(true);
-    setError(null);
-
+  const searchFlights = async (params: SearchParams) => {
     try {
-      // Check for cached results first
-      const cachedResults = await flightService.getCachedResults(params);
-      if (cachedResults) {
-        setResults(cachedResults);
-        setLoading(false);
-        return;
+      setLoading(true);
+      setError(null);
+
+      if (!params.from || !params.to || !params.departureDate) {
+        throw new Error('Missing required search parameters');
       }
 
-      // If offline and no cache, show error
-      if (isOffline) {
-        throw new Error('You are offline and no cached results are available');
+      // Try cached results first
+      if (isReady) {
+        const cachedData = await getCachedFlights(
+          params.from,
+          params.to,
+          params.departureDate
+        );
+
+        if (cachedData) {
+          const outboundFlightData = cachedData.flights.map((flight) => ({
+            flight,
+            prices: cachedData.flightPrices[flight.id] || [],
+            availableSeats: processSeatData(
+              cachedData.seatData.filter(seat => seat.flight_id === flight.id)
+            )
+          }));
+
+          const returnFlightData = (cachedData.returnFlights || []).map((flight) => ({
+            flight,
+            prices: cachedData.flightPrices[flight.id] || [],
+            availableSeats: processSeatData(
+              cachedData.seatData.filter(seat => seat.flight_id === flight.id)
+            )
+          }));
+
+          setOutboundFlights(outboundFlightData);
+          setReturnFlights(returnFlightData);
+          setLoading(false);
+          return;
+        }
       }
 
-      // Perform live search
-      const { data, error } = await supabase
+      // Fetch from API if no cache
+      const { data: outboundData, error: outboundError } = await supabase
         .from('flights')
+        .select('*, flight_prices(*)')
+        .eq('departure_airport', params.from)
+        .eq('arrival_airport', params.to)
+        .eq('status', 'scheduled')
+        .order('departure_time', { ascending: true })
+        .limit(10);
+
+      if (outboundError) throw outboundError;
+
+      let returnData = [];
+      if (params.isRoundTrip) {
+        const { data: returnFlightsData, error: returnError } = await supabase
+          .from('flights')
+          .select('*, flight_prices(*)')
+          .eq('departure_airport', params.to)
+          .eq('arrival_airport', params.from)
+          .eq('status', 'scheduled');
+
+        if (returnError) throw returnError;
+        returnData = returnFlightsData || [];
+      }
+
+      const flightIds = [...(outboundData || []), ...returnData].map(flight => flight.id);
+      const { data: seatData, error: seatError } = await supabase
+        .from('seat_map')
         .select('*')
-        .eq('departure_airport', params.origin)
-        .eq('arrival_airport', params.destination)
-        .gte('departure_time', `${params.departureDate}T00:00:00`)
-        .lte('departure_time', `${params.departureDate}T23:59:59`)
-        .gt(`available_seats->>${params.cabinClass}`, 
-          params.passengers.adults + params.passengers.children + params.passengers.infants - 1);
+        .in('flight_id', flightIds)
+        .eq('is_available', true);
 
-      if (error) throw error;
+      if (seatError) throw seatError;
 
-      // Cache the results
-      await flightService.cacheSearchResults(params, data || []);
-      setResults(data || []);
+      // Cache results
+      if (isReady) {
+        const flightPrices = [...(outboundData || []), ...returnData].reduce((acc, flight) => {
+          acc[flight.id] = flight.flight_prices;
+          return acc;
+        }, {} as Record<string, FlightPrice[]>);
 
-    } catch (err) {
-      console.error('Error searching flights:', err);
-      setError(err instanceof Error ? err.message : 'Failed to search flights');
+        await cacheFlights(
+          params.from,
+          params.to,
+          params.departureDate,
+          outboundData || [],
+          flightPrices,
+          seatData || [],
+          returnData
+        );
+      }
+
+      const seatAvailability = processSeatData(seatData || []);
+
+      setOutboundFlights((outboundData || []).map(flight => ({
+        flight,
+        prices: flight.flight_prices || [],
+        availableSeats: seatAvailability[flight.id] || getEmptySeatMap()
+      })));
+
+      setReturnFlights(returnData.map(flight => ({
+        flight,
+        prices: flight.flight_prices || [],
+        availableSeats: seatAvailability[flight.id] || getEmptySeatMap()
+      })));
+
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch flights');
     } finally {
       setLoading(false);
     }
-  }, [isOffline]);
-
-  const getFlightById = useCallback(async (flightId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('flights')
-        .select('*')
-        .eq('id', flightId)
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (err) {
-      console.error('Error getting flight:', err);
-      throw err;
-    }
-  }, []);
+  };
 
   return {
+    outboundFlights,
+    returnFlights,
     loading,
     error,
-    results,
-    isOffline,
-    searchFlights,
-    getFlightById,
+    searchFlights
   };
 }

@@ -1,128 +1,156 @@
-import { initDB } from './config';
-import type { Database } from '@/types/supabase';
+// import { initDB } from './config';
+// import type { Database } from '@/types/supabase';
+// import { CabinClass } from '@/types/flight';
 
-export interface SearchParams {
-  origin: string;
-  destination: string;
-  departureDate: string;
-  returnDate?: string;
-  passengers: {
-    adults: number;
-    children: number;
-    infants: number;
-  };
-  cabinClass: string;
-}
+// type DBFlight = Database['public']['Tables']['flights']['Row'];
 
-export interface FlightCache {
-  id: string;
-  searchParams: SearchParams;
-  results: Database['public']['Tables']['flights']['Row'][];
-  timestamp: number;
-}
+// // Transform database flight type to match FlightResult type
+// interface FlightResult extends Omit<DBFlight, 'duration'> {
+//   duration: string; // Convert duration to string format
+// }
 
-class FlightService {
-  private readonly CACHE_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
+// export interface SearchParams {
+//   origin: string;
+//   destination: string;
+//   departureDate: string;
+//   returnDate?: string;
+//   passengers: {
+//     adults: number;
+//     children: number;
+//     infants: number;
+//   };
+//   cabinClass: CabinClass; // Updated to use CabinClass type
+// }
 
-  /**
-   * Cache flight search results
-   */
-  async cacheSearchResults(searchParams: SearchParams, results: Database['public']['Tables']['flights']['Row'][]): Promise<void> {
-    const db = await initDB();
-    const id = this.generateSearchId(searchParams);
+// export interface FlightCache {
+//   id: string;
+//   searchParams: SearchParams;
+//   results: FlightResult[];
+//   timestamp: number;
+// }
 
-    await db.put('flights', {
-      id,
-      searchParams,
-      results,
-      timestamp: Date.now(),
-    });
+// class FlightService {
+//   private readonly CACHE_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
 
-    // Clean up old cache entries
-    await this.cleanupOldCache();
-  }
+//   /**
+//    * Transform database flight to FlightResult
+//    */
+//   private transformFlight(flight: DBFlight): FlightResult {
+//     return {
+//       ...flight,
+//       duration: this.formatDuration(flight.duration)
+//     };
+//   }
 
-  /**
-   * Get cached flight search results if available and not expired
-   */
-  async getCachedResults(searchParams: SearchParams): Promise<Database['public']['Tables']['flights']['Row'][] | null> {
-    const db = await initDB();
-    const id = this.generateSearchId(searchParams);
+//   /**
+//    * Format duration from number to string (HH:mm:ss)
+//    */
+//   private formatDuration(minutes: number): string {
+//     const hours = Math.floor(minutes / 60);
+//     const mins = minutes % 60;
+//     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:00`;
+//   }
 
-    const cached = await db.get('flights', id);
-    if (!cached) return null;
+//   /**
+//    * Cache flight search results
+//    */
+//   async cacheSearchResults(searchParams: SearchParams, flights: DBFlight[]): Promise<void> {
+//     const db = await initDB();
+//     const id = this.generateSearchId(searchParams);
 
-    // Check if cache is expired
-    if (Date.now() - cached.timestamp > this.CACHE_DURATION) {
-      await db.delete('flights', id);
-      return null;
-    }
+//     await db.put('flights', {
+//       id,
+//       searchParams,
+//       results: flights.map(flight => this.transformFlight(flight)),
+//       timestamp: Date.now(),
+//       expiresAt: Date.now() + this.CACHE_DURATION
+//     });
 
-    return cached.results;
-  }
+//     // Clean up old cache entries
+//     await this.cleanupOldCache();
+//   }
 
-  /**
-   * Cache booking data for offline access
-   */
-  static async cacheBooking(userId: string, bookingId: string, flightId: string, data: any): Promise<void> {
-    const db = await initDB();
-    await db.put('bookings', {
-      id: bookingId,
-      userId,
-      flightId,
-      data,
-      timestamp: Date.now(),
-    });
-  }
+//   /**
+//    * Get cached flight search results if available and not expired
+//    */
+//   async getCachedResults(searchParams: SearchParams): Promise<FlightResult[] | null> {
+//     const db = await initDB();
+//     const id = this.generateSearchId(searchParams);
 
-  /**
-   * Get user's cached bookings
-   */
-  static async getCachedBookings(userId: string): Promise<any[]> {
-    const db = await initDB();
-    const index = db.transaction('bookings').store.index('by-user');
-    return index.getAll(userId);
-  }
+//     const cached = await db.get('flights', id);
+//     if (!cached) return null;
 
-  /**
-   * Clean up expired cache entries
-   */
-  private async cleanupOldCache(): Promise<void> {
-    const db = await initDB();
-    const tx = db.transaction('flights', 'readwrite');
-    const index = tx.store.index('by-timestamp');
-    const expiredTimestamp = Date.now() - this.CACHE_DURATION;
+//     // Check if cache is expired
+//     if (Date.now() > cached.expiresAt) {
+//       await db.delete('flights', id);
+//       return null;
+//     }
 
-    let cursor = await index.openCursor();
-    while (cursor) {
-      if (cursor.value.timestamp < expiredTimestamp) {
-        await cursor.delete();
-      }
-      cursor = await cursor.continue();
-    }
-  }
+//     return cached.results;
+//   }
 
-  /**
-   * Generate a unique ID for the search parameters
-   */
-  private generateSearchId(params: SearchParams): string {
-    const searchKey = `${params.origin}-${params.destination}-${params.departureDate}-${params.returnDate || ''}-${params.cabinClass}-${params.passengers.adults}-${params.passengers.children}-${params.passengers.infants}`;
-    return btoa(searchKey);
-  }
+//   /**
+//    * Cache booking data for offline access
+//    */
+//   static async cacheBooking(userId: string, bookingId: string, flightId: string, data: any): Promise<void> {
+//     const db = await initDB();
+//     await db.put('bookings', {
+//       id: bookingId,
+//       userId,
+//       flightId,
+//       data,
+//       timestamp: Date.now(),
+//     });
+//   }
 
-  /**
-   * Check if IndexedDB is available
-   */
-  async isAvailable(): Promise<boolean> {
-    try {
-      const db = await initDB();
-      await db.close();
-      return true;
-    } catch (error) {
-      console.error('IndexedDB not available:', error);
-      return false;
-    }
-  }
-}
+//   /**
+//    * Get user's cached bookings
+//    */
+//   static async getCachedBookings(userId: string): Promise<any[]> {
+//     const db = await initDB();
+//     const index = db.transaction('bookings').store.index('by-user');
+//     return index.getAll(userId);
+//   }
 
-export const flightService = new FlightService();
+//   /**
+//    * Clean up expired cache entries
+//    */
+//   private async cleanupOldCache(): Promise<void> {
+//     const db = await initDB();
+//     const tx = db.transaction('flights', 'readwrite');
+//     const index = tx.store.index('by-timestamp');
+//     const expiredTimestamp = Date.now();
+
+//     let cursor = await index.openCursor();
+//     while (cursor) {
+//       if (cursor.value.expiresAt < expiredTimestamp) {
+//         await cursor.delete();
+//       }
+//       cursor = await cursor.continue();
+//     }
+//   }
+
+//   /**
+//    * Generate a unique ID for the search parameters
+//    */
+//   private generateSearchId(params: SearchParams): string {
+//     const searchKey = `${params.origin}-${params.destination}-${params.departureDate}-${params.returnDate || ''}-${params.cabinClass}-${params.passengers.adults}-${params.passengers.children}-${params.passengers.infants}`;
+//     return btoa(searchKey);
+//   }
+
+//   /**
+//    * Check if IndexedDB is available
+//    */
+//   async isAvailable(): Promise<boolean> {
+//     try {
+//       const db = await initDB();
+//       await db.close();
+//       return true;
+//     } catch (error) {
+//       console.error('IndexedDB not available:', error);
+//       return false;
+//     }
+//   }
+// }
+
+// export const flightService = new FlightService();

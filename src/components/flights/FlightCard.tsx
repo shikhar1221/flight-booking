@@ -37,7 +37,7 @@ export function FlightCard({ flight, prices, availableSeats, selectedCabin, isRe
     params.append('price', selectedPrice.toString());
     params.append('isReturn', isReturn.toString());
 
-    router.push(`/booking?${params.toString()}`);
+    router.push(`/flights/book?${params.toString()}`);
   };
 
   return (

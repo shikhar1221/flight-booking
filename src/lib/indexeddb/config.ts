@@ -1,8 +1,18 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 
 // Define types for better type safety
-export type CabinClass = 'economy' | 'premium_economy' | 'business' | 'first';
-export type BookingStatus = 'draft' | 'pending' | 'confirmed' | 'cancelled';
+export enum CabinClass {
+  Economy = 'Economy',
+  PremiumEconomy = 'Premium Economy',
+  Business = 'Business',
+  First = 'First'
+}
+export type CabinClassType = CabinClass;
+export enum BookingStatus {
+  PENDING = 'pending',
+  CONFIRMED = 'confirmed',
+  CANCELLED = 'cancelled'
+}
 export type PaymentStatus = 'pending' | 'completed' | 'failed';
 export type PassengerType = 'adult' | 'child' | 'infant';
 
@@ -16,18 +26,25 @@ export interface SearchParams {
     children: number;
     infants: number;
   };
-  cabinClass: CabinClass;
+  cabinClass: CabinClassType;
 }
 
 export interface FlightResult {
   id: string;
-  airline: string;
   flight_number: string;
-  departure_time: string;
-  arrival_time: string;
+  airline: string;
   departure_airport: string;
   arrival_airport: string;
+  departure_time: string;
+  arrival_time: string;
   duration: string;
+  status: 'ON_TIME' | 'DELAYED' | 'BOARDING' | 'DEPARTED' | 'CANCELLED';
+  created_at: string;
+  updated_at: string;
+  economy_seats: number;
+  premium_economy_seats: number;
+  business_seats: number;
+  first_seats: number;
   economy_available_seats: number;
   premium_economy_available_seats: number;
   business_available_seats: number;
@@ -63,7 +80,7 @@ export interface BookingData {
   passengersDetails: PassengerDetails[];
   contactDetails: ContactDetails;
   selectedSeats?: string[];
-  cabinClass: CabinClass;
+  cabinClass: CabinClassType;
   totalPrice: number;
   paymentStatus: PaymentStatus;
 }
@@ -94,6 +111,7 @@ interface FlightBookingDB extends DBSchema {
       data: BookingData;
       createdAt: number;
       updatedAt: number;
+      validUntil: number; // Using validUntil instead of expiresAt to match schema
     };
     indexes: { 
       'by-user': string;

@@ -240,7 +240,7 @@ Thank you for choosing our service!
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
                             <p className="text-gray-500">Name</p>
-                            <p className="font-medium">{passenger.firstName} {passenger.lastName}</p>
+                            <p className="font-medium">{passenger.name}</p>
                           </div>
                           <div>
                             <p className="text-gray-500">Type</p>

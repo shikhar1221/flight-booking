@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useFlightSearch } from '@/hooks/useFlightSearch';
-import { useFlightWorker } from '@/hooks/useFlightWorker';
+import { useFlightWorker, SortField } from '@/hooks/useFlightWorker';
 import { FlightCard } from '@/components/flights/FlightCard';
 import type { Database } from '@/types/supabase';
-import { SortField } from '@/hooks/useFlightWorker';
 
 type Flight = Database['public']['Tables']['flights']['Row'];
 type FlightPrice = Database['public']['Tables']['flight_prices']['Row'];
+import { CabinClass } from '@/lib/indexeddb/config';
+import type { SearchParams } from '@/types/search';
 
 interface FlightData {
   flight: Flight;
@@ -23,14 +24,19 @@ export default function ClientFlightSearch() {
   const [loading, setLoading] = useState(true);
   const [isRoundTrip] = useState(searchParams.get('returnDate') !== null);
   const [sortBy, setSortBy] = useState<SortField>('departureTime');
-  const cabinClasses = ['economy', 'premium_economy', 'business', 'first'];
+  const cabinClasses = [
+    CabinClass.Economy,
+    CabinClass.PremiumEconomy,
+    CabinClass.Business,
+    CabinClass.First
+  ];
   const [outboundCabin, setOutboundCabin] = useState(cabinClasses[0]);
   const [returnCabin, setReturnCabin] = useState(cabinClasses[0]);
   const cabinClassLabels = {
-    economy: 'Economy',
-    premium_economy: 'Premium Economy',
-    business: 'Business',
-    first: 'First'
+    [CabinClass.Economy]: 'Economy',
+    [CabinClass.PremiumEconomy]: 'Premium Economy',
+    [CabinClass.Business]: 'Business',
+    [CabinClass.First]: 'First'
   };
 
   // Use the hooks
@@ -55,7 +61,10 @@ export default function ClientFlightSearch() {
     const destination = searchParams.get('to') || '';
     const departureDate = searchParams.get('departureDate') || '';
     const returnDate = searchParams.get('returnDate') || '';
-    const cabinClass = searchParams.get('cabinClass') || 'Economy';
+    const rawCabinClass = searchParams.get('cabinClass')?.toUpperCase() || 'ECONOMY';
+    
+    // Map the raw cabin class to enum
+    const cabinClass = CabinClass[rawCabinClass as keyof typeof CabinClass] || CabinClass.Economy;
     
     if (!origin || !destination || !departureDate) {
       throw new Error('Missing required search parameters');
@@ -72,15 +81,17 @@ export default function ClientFlightSearch() {
         children: parseInt(searchParams.get('children') || '0'),
         infants: parseInt(searchParams.get('infants') || '0')
       }
-    };
+    } satisfies SearchParams;
   }, [searchParams]);
 
   useEffect(() => {
-    // Search for flights when parameters change
     const search = async () => {
       setLoading(true);
       try {
         await searchFlights(searchParamsObj);
+        // Update local state with search results
+        setOutboundFlights(searchOutboundFlights);
+        setReturnFlights(searchReturnFlights);
       } catch (error) {
         console.error('Error searching flights:', error);
       } finally {
@@ -88,36 +99,48 @@ export default function ClientFlightSearch() {
       }
     };
     search();
-  }, [searchParamsObj, searchFlights]);
+  }, [searchParamsObj, searchFlights, searchOutboundFlights, searchReturnFlights]);
 
   const handleSort = async (field: SortField) => {
     setSortBy(field);
-    if (searchOutboundFlights.length > 0) {
-      try {
-        setLoading(true);
-        const sortedFlights = await sortFlights(searchOutboundFlights.map(f => f.flight), field, 'asc');
-        
-        // Convert sorted flights back to FlightData format
-        const sortedFlightData = sortedFlights.map(flight => {
-          const originalFlightData = searchOutboundFlights.find(fd => fd.flight.id === flight.id);
-          return {
-            flight,
-            prices: originalFlightData?.prices || [],
-            availableSeats: originalFlightData?.availableSeats || {
-              economy: 0,
-              premium_economy: 0,
-              business: 0,
-              first: 0
-            }
-          };
-        });
-  
-        setOutboundFlights(sortedFlightData);
-      } catch (error) {
-        console.error('Error sorting flights:', error);
-      } finally {
-        setLoading(false);
+    try {
+      setLoading(true);
+      
+      // Sort outbound flights
+      if (searchOutboundFlights.length > 0) {
+        const sortedOutbound = await sortFlights(searchOutboundFlights.map(f => f.flight), field, 'asc');
+        const sortedOutboundData = sortedOutbound.map(flight => ({
+          flight,
+          prices: searchOutboundFlights.find(fd => fd.flight.id === flight.id)?.prices || [],
+          availableSeats: searchOutboundFlights.find(fd => fd.flight.id === flight.id)?.availableSeats || {
+            economy: 0,
+            premium_economy: 0,
+            business: 0,
+            first: 0
+          }
+        }));
+        setOutboundFlights(sortedOutboundData);
       }
+
+      // Sort return flights
+      if (isRoundTrip && searchReturnFlights.length > 0) {
+        const sortedReturn = await sortFlights(searchReturnFlights.map(f => f.flight), field, 'asc');
+        const sortedReturnData = sortedReturn.map(flight => ({
+          flight,
+          prices: searchReturnFlights.find(fd => fd.flight.id === flight.id)?.prices || [],
+          availableSeats: searchReturnFlights.find(fd => fd.flight.id === flight.id)?.availableSeats || {
+            economy: 0,
+            premium_economy: 0,
+            business: 0,
+            first: 0
+          }
+        }));
+        setReturnFlights(sortedReturnData);
+      }
+    } catch (error) {
+      console.error('Error sorting flights:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -237,13 +260,13 @@ export default function ClientFlightSearch() {
             <div className="border-r border-gray-100">
               <div className="p-8 bg-white rounded-lg shadow-sm">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Outbound Flights</h2>
-                {searchOutboundFlights.length === 0 ? (
+                {outboundFlights.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
                     No outbound flights found for your search criteria.
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {searchOutboundFlights.map((flightData) => (
+                    {outboundFlights.map((flightData) => (
                       <FlightCard
                         key={flightData.flight.id}
                         flight={flightData.flight}
@@ -259,29 +282,31 @@ export default function ClientFlightSearch() {
             </div>
 
             {/* Return Column */}
-            <div className="border-r border-gray-100">
-              <div className="p-8 bg-white rounded-lg shadow-sm">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Return Flights</h2>
-                {searchReturnFlights.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    No return flights found for your search criteria.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {searchReturnFlights.map((flightData) => (
-                      <FlightCard
-                        key={flightData.flight.id}
-                        flight={flightData.flight}
-                        prices={flightData.prices}
-                        availableSeats={flightData.availableSeats}
-                        selectedCabin={returnCabin}
-                        isReturn={true}
-                      />
-                    ))}
-                  </div>
-                )}
+            {isRoundTrip && (
+              <div className="border-r border-gray-100">
+                <div className="p-8 bg-white rounded-lg shadow-sm">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Return Flights</h2>
+                  {returnFlights.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      No return flights found for your search criteria.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {returnFlights.map((flightData) => (
+                        <FlightCard
+                          key={flightData.flight.id}
+                          flight={flightData.flight}
+                          prices={flightData.prices}
+                          availableSeats={flightData.availableSeats}
+                          selectedCabin={returnCabin}
+                          isReturn={true}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}

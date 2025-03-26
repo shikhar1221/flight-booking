@@ -91,8 +91,10 @@ export default function ClientFlightBooking() {
   
   const getAvailableSeats = () => {
     if (!bookFlight?.flight) return 0;
-    const seatKey = `${rawCabinClass}_available_seats` as keyof typeof bookFlight.flight;
-    return bookFlight.flight[seatKey] || 0;
+    
+    // Convert cabin class to the correct database field name
+    const seatKey = cabinClass.toLowerCase().replace(' ', '_') + '_available_seats';
+    return bookFlight.flight[seatKey as keyof typeof bookFlight.flight] || 0;
   };
 
   useEffect(() => {
@@ -188,7 +190,7 @@ export default function ClientFlightBooking() {
       if (!booking) throw new Error('Failed to create booking');
 
       const updateData = {
-        [`${rawCabinClass}_available_seats`]: parseInt(availableSeats.toString()) - totalPassengers,
+        [`${rawCabinClass.toLowerCase()}_available_seats`]: parseInt(availableSeats.toString()) - totalPassengers,
         updated_at: new Date().toISOString()
       };
 

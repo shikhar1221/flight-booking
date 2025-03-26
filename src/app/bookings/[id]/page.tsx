@@ -22,33 +22,57 @@ export default function BookingConfirmationPage() {
   useEffect(() => {
     const loadBookingDetails = async () => {
       try {
-        if (!user) throw new Error('User not authenticated');
+        // Get user from session directly
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const userId = currentSession?.user?.id;
+        
+        if (!userId) {
+          setError('User not authenticated');
+          setLoading(false);
+          return;
+        }
+        
         const bookingId = params.id;
-
+    
         // Fetch booking details
         const { data: bookingData, error: bookingError } = await supabase
           .from('bookings')
           .select('*')
           .eq('id', bookingId)
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .single();
-
+    
         if (bookingError) throw bookingError;
         if (!bookingData) throw new Error('Booking not found');
-
+    
         setBooking(bookingData);
-
+    
         // Fetch flight details
         const { data: flightData, error: flightError } = await supabase
           .from('flights')
           .select('*')
           .eq('id', bookingData.flight_id)
           .single();
-
+    
         if (flightError) throw flightError;
         if (!flightData) throw new Error('Flight not found');
-
+    
         setFlight(flightData);
+    
+        // Try to send email but don't block on failure
+        try {
+          await EmailService.sendBookingConfirmation(
+            currentSession.user.email!,
+            bookingData.id,
+            flightData.flight_number,
+            bookingData.passengers[0].name,
+            flightData.departure_airport,
+            flightData.arrival_airport,
+            flightData.departure_time
+          );
+        } catch (emailError) {
+          console.warn('Email service failed but booking was successful:', emailError);
+        }
       } catch (err) {
         console.error('Error loading booking details:', err);
         setError('Failed to load booking details');
@@ -58,7 +82,7 @@ export default function BookingConfirmationPage() {
     };
 
     loadBookingDetails();
-  }, [params.id, user]);
+  }, [params.id]);
 
   const handleDownloadETicket = () => {
     if (!booking || !flight) return;
@@ -108,9 +132,16 @@ Thank you for choosing our service!
   };
 
   const handleCancelBooking = async () => {
-    if (!booking || !flight || !user) return;
+    if (!booking || !flight) return;
 
     try {
+      // Get user from session directly
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession?.user) {
+        setError('User not authenticated');
+        return;
+      }
+
       // Update booking status
       const { error: bookingError } = await supabase
         .from('bookings')
@@ -134,7 +165,7 @@ Thank you for choosing our service!
 
       // Send cancellation email
       await EmailService.sendBookingCancellation(
-        user.email!,
+        currentSession.user.email!,
         booking.id,
         flight.flight_number,
         booking.passengers[0].name
@@ -199,35 +230,35 @@ Thank you for choosing our service!
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <p className="text-gray-500">Flight Number</p>
-                      <p className="font-medium">{flight.flight_number}</p>
+                      <p className="font-medium text-blue-950">{flight.flight_number}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">Airline</p>
-                      <p className="font-medium">{flight.airline}</p>
+                      <p className="font-medium text-blue-950">{flight.airline}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">From</p>
-                      <p className="font-medium">{flight.departure_airport}</p>
+                      <p className="font-medium text-blue-950">{flight.departure_airport}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">To</p>
-                      <p className="font-medium">{flight.arrival_airport}</p>
+                      <p className="font-medium text-blue-950">{flight.arrival_airport}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">Departure</p>
-                      <p className="font-medium">
+                      <p className="font-medium text-blue-950">
                         {new Date(flight.departure_time).toLocaleString()}
                       </p>
                     </div>
                     <div>
                       <p className="text-gray-500">Arrival</p>
-                      <p className="font-medium">
+                      <p className="font-medium text-blue-950">
                         {new Date(flight.arrival_time).toLocaleString()}
                       </p>
                     </div>
                     <div>
                       <p className="text-gray-500">Total Price</p>
-                      <p className="font-medium">${booking.total_price.toFixed(2)}</p>
+                      <p className="font-medium text-blue-950">${booking.total_price.toFixed(2)}</p>
                     </div>
                   </div>
                 </div>
@@ -240,22 +271,22 @@ Thank you for choosing our service!
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
                             <p className="text-gray-500">Name</p>
-                            <p className="font-medium">{passenger.name}</p>
+                            <p className="font-medium text-blue-950">{passenger.name}</p>
                           </div>
                           <div>
                             <p className="text-gray-500">Type</p>
-                            <p className="font-medium">{passenger.type}</p>
+                            <p className="font-medium text-blue-950">{passenger.type}</p>
                           </div>
                           {passenger.passportNumber && (
                             <div>
                               <p className="text-gray-500">Passport Number</p>
-                              <p className="font-medium">{passenger.passportNumber}</p>
+                              <p className="font-medium text-blue-950">{passenger.passportNumber}</p>
                             </div>
                           )}
                           {passenger.specialRequirements && (
                             <div className="col-span-2">
                               <p className="text-gray-500">Special Requirements</p>
-                              <p className="font-medium">{passenger.specialRequirements}</p>
+                              <p className="font-medium text-blue-950">{passenger.specialRequirements}</p>
                             </div>
                           )}
                         </div>

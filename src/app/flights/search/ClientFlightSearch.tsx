@@ -39,22 +39,6 @@ export default function ClientFlightSearch() {
     [CabinClass.First]: 'First'
   };
 
-  // Use the hooks
-  const { 
-    searchFlights, 
-    loading: isSearching, 
-    error: searchError, 
-    outboundFlights: searchOutboundFlights, 
-    returnFlights: searchReturnFlights 
-  } = useFlightSearch();
-  
-  const { 
-    filterFlights, 
-    sortFlights, 
-    processing: isProcessing, 
-    error: workerError 
-  } = useFlightWorker();
-
   // Convert search params to SearchParams type with validation
   const searchParamsObj = useMemo(() => {
     const origin = searchParams.get('from') || '';
@@ -84,22 +68,51 @@ export default function ClientFlightSearch() {
     } satisfies SearchParams;
   }, [searchParams]);
 
+  // Use the hooks
+  const { 
+    searchFlights, 
+    loading: isSearching, 
+    error: searchError
+  } = useFlightSearch();
+  
+  const { 
+    filterFlights, 
+    sortFlights, 
+    processing: isProcessing, 
+    error: workerError 
+  } = useFlightWorker();
+
+  // Add initial loading state
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+
   useEffect(() => {
     const search = async () => {
       setLoading(true);
       try {
-        await searchFlights(searchParamsObj);
-        // Update local state with search results
-        setOutboundFlights(searchOutboundFlights);
-        setReturnFlights(searchReturnFlights);
+        const result = await searchFlights(searchParamsObj);
+        if (result) {
+          console.log('Flight results:', result); // Add this debug log
+          setOutboundFlights(result.outboundFlights);
+          setReturnFlights(result.returnFlights);
+        }
       } catch (error) {
         console.error('Error searching flights:', error);
       } finally {
         setLoading(false);
+        setIsInitialLoading(false);
       }
     };
     search();
-  }, [searchParamsObj, searchFlights, searchOutboundFlights, searchReturnFlights]);
+  }, [searchParamsObj, searchFlights]);
+
+  if (isInitialLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        <p className="text-xl text-gray-600">Loading flights...</p>
+      </div>
+    );
+  }
 
   const handleSort = async (field: SortField) => {
     setSortBy(field);
@@ -107,12 +120,16 @@ export default function ClientFlightSearch() {
       setLoading(true);
       
       // Sort outbound flights
-      if (searchOutboundFlights.length > 0) {
-        const sortedOutbound = await sortFlights(searchOutboundFlights.map(f => f.flight), field, 'asc');
+      if (outboundFlights.length > 0) {
+        const sortedOutbound = await sortFlights(
+          outboundFlights.map(f => f.flight),
+          field,
+          'asc'
+        );
         const sortedOutboundData = sortedOutbound.map(flight => ({
           flight,
-          prices: searchOutboundFlights.find(fd => fd.flight.id === flight.id)?.prices || [],
-          availableSeats: searchOutboundFlights.find(fd => fd.flight.id === flight.id)?.availableSeats || {
+          prices: outboundFlights.find(fd => fd.flight.id === flight.id)?.prices || [],
+          availableSeats: outboundFlights.find(fd => fd.flight.id === flight.id)?.availableSeats || {
             economy: 0,
             premium_economy: 0,
             business: 0,
@@ -123,12 +140,16 @@ export default function ClientFlightSearch() {
       }
 
       // Sort return flights
-      if (isRoundTrip && searchReturnFlights.length > 0) {
-        const sortedReturn = await sortFlights(searchReturnFlights.map(f => f.flight), field, 'asc');
+      if (isRoundTrip && returnFlights.length > 0) {
+        const sortedReturn = await sortFlights(
+          returnFlights.map(f => f.flight),
+          field,
+          'asc'
+        );
         const sortedReturnData = sortedReturn.map(flight => ({
           flight,
-          prices: searchReturnFlights.find(fd => fd.flight.id === flight.id)?.prices || [],
-          availableSeats: searchReturnFlights.find(fd => fd.flight.id === flight.id)?.availableSeats || {
+          prices: returnFlights.find(fd => fd.flight.id === flight.id)?.prices || [],
+          availableSeats: returnFlights.find(fd => fd.flight.id === flight.id)?.availableSeats || {
             economy: 0,
             premium_economy: 0,
             business: 0,
@@ -166,7 +187,7 @@ export default function ClientFlightSearch() {
               <select 
                 value={sortBy}
                 onChange={(e) => handleSort(e.target.value as SortField)}
-                className="px-3 py-1.5 rounded-md border border-gray-200 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="px-3 py-1.5 rounded-md border border-gray-200 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black bg-white"
               >
                 <option value="departureTime">Departure Time</option>
                 <option value="price">Price</option>
@@ -255,9 +276,9 @@ export default function ClientFlightSearch() {
       ) : (
         <div className="space-y-8">
           {/* Main Content */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8">
+          <div className={`grid grid-cols-1 ${isRoundTrip ? 'md:grid-cols-2' : 'md:max-w-3xl md:mx-auto'} gap-8`}>
             {/* Outbound Column */}
-            <div className="border-r border-gray-100">
+            <div className={`${isRoundTrip ? 'border-r border-gray-100' : ''}`}>
               <div className="p-8 bg-white rounded-lg shadow-sm">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Outbound Flights</h2>
                 {outboundFlights.length === 0 ? (
@@ -283,7 +304,7 @@ export default function ClientFlightSearch() {
 
             {/* Return Column */}
             {isRoundTrip && (
-              <div className="border-r border-gray-100">
+              <div>
                 <div className="p-8 bg-white rounded-lg shadow-sm">
                   <h2 className="text-xl font-semibold text-gray-900 mb-4">Return Flights</h2>
                   {returnFlights.length === 0 ? (

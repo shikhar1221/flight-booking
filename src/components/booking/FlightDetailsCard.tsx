@@ -32,14 +32,21 @@ export const FlightDetailsCard = ({ bookFlight, getCabinClass, price }: FlightDe
     return price;
   };
 
-  const formatDuration = (duration: string) => {
-    // Split the time string into hours, minutes, seconds
-    const [hours, minutes] = duration.split(':');
+  const formatDuration = (duration: number | null) => {
+    if (!duration) {
+      // Calculate duration from departure and arrival times
+      const departure = new Date(bookFlight.flight.departure_time);
+      const arrival = new Date(bookFlight.flight.arrival_time);
+      const diffInMinutes = Math.round((arrival.getTime() - departure.getTime()) / (1000 * 60));
+      const hours = Math.floor(diffInMinutes / 60);
+      const minutes = diffInMinutes % 60;
+      return `${hours}h ${minutes}m`;
+    }
     
-    // Convert to numbers and format
+    // Split the time string into hours, minutes
+    const [hours, minutes] = duration.toString().split(':');
     const h = parseInt(hours, 10);
     const m = parseInt(minutes, 10);
-    
     return `${h}h ${m}m`;
   };
 
@@ -86,7 +93,7 @@ export const FlightDetailsCard = ({ bookFlight, getCabinClass, price }: FlightDe
           </div>
           <div className="flex items-center space-x-2 text-gray-600">
             <Clock className="h-4 w-4" />
-            <span className="font-medium">{formatDuration(bookFlight.flight.duration.toString())}</span>
+            <span className="font-medium">{formatDuration(bookFlight.flight.duration)}</span>
           </div>
         </div>
 
@@ -110,7 +117,7 @@ export const FlightDetailsCard = ({ bookFlight, getCabinClass, price }: FlightDe
           {/* Flight Path */}
           <div className="flex-1 flex items-center justify-center relative px-4">
             <div className="h-0.5 w-full bg-gray-300 absolute"></div>
-            <div className="bg-white p-2 rounded-full border-2 border-primary z-10">
+            <div className="bg-black p-2 rounded-full border-2 border-primary z-10">
               <Plane className="h-5 w-5 text-primary transform rotate-90" />
             </div>
           </div>

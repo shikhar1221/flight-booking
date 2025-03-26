@@ -21,13 +21,16 @@ const cabinClassLabels = {
   first: 'First'
 };
 
+type PriceKey = `${Lowercase<string>}_price`;
+type FlightPriceKeys = keyof Pick<Flight, 'economy_price' | 'premium_economy_price' | 'business_price' | 'first_price'>;
+
 export function FlightCard({ flight, prices, availableSeats, selectedCabin, isReturn = false, className = '' }: FlightCardProps) {
   const router = useRouter();
-  // const [isLoading, setIsLoading] = useState(false);
-  // const [isBooked, setIsBooked] = useState(false);
 
-  // Use the received cabin class directly
-  const selectedPrice = prices.find(p => p.cabin_class.toLowerCase() === selectedCabin.toLowerCase())?.price || 0;
+  // Update the price selection logic with proper type checking
+  const selectedPrice = prices.find(p => 
+    p.cabin_class.toLowerCase() === selectedCabin.toLowerCase()
+  )?.price || flight[`${selectedCabin.toLowerCase()}_price` as FlightPriceKeys] || 0;
   const selectedAvailableSeats = availableSeats[selectedCabin.toLowerCase()] || 0;
 
   const handleCardClick = () => {
@@ -39,6 +42,32 @@ export function FlightCard({ flight, prices, availableSeats, selectedCabin, isRe
 
     router.push(`/flights/book?${params.toString()}`);
   };
+
+  // Add duration formatting helper
+  const formatDuration = (duration: string) => {
+    if (!duration) return '0h';
+    
+    // Remove leading zeros and get hours and minutes
+    const cleanTime = duration.replace(/^0+/, '');
+    const [hours, minutes] = cleanTime.split(':');
+    const numHours = parseInt(hours || '0', 10);
+    const numMinutes = parseInt(minutes || '0', 10);
+    
+    if (numHours === 0 && numMinutes === 0) return '0h';
+    return numMinutes > 0 ? `${numHours}h ${numMinutes}m` : `${numHours}h`;
+  };
+
+  // Add duration calculation helper
+  const calculateDuration = () => {
+    const departure = new Date(flight.departure_time);
+    const arrival = new Date(flight.arrival_time);
+    const diffInMinutes = Math.round((arrival.getTime() - departure.getTime()) / (1000 * 60));
+    const hours = Math.floor(diffInMinutes / 60);
+    const minutes = diffInMinutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
+  };
+
+  const flightDuration = flight.duration || calculateDuration();
 
   return (
     <div
@@ -60,7 +89,7 @@ export function FlightCard({ flight, prices, availableSeats, selectedCabin, isRe
             </div>
           </div>
           <div className="text-sm text-gray-500">
-            {flight.duration}h
+            {flightDuration}
           </div>
         </div>
   
@@ -89,7 +118,7 @@ export function FlightCard({ flight, prices, availableSeats, selectedCabin, isRe
           <div className="text-sm text-gray-500">
             <div className="flex items-center justify-center">
               <div className="w-12 h-12 flex items-center justify-center bg-white rounded-full">
-                <span className="text-sm font-medium text-gray-600">{flight.duration}h</span>
+                <span className="text-sm font-medium text-gray-600">{flightDuration}</span>
               </div>
             </div>
           </div>

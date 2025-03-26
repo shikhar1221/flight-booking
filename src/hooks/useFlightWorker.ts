@@ -53,7 +53,7 @@ export function useFlightWorker() {
           worker.removeEventListener('message', handleMessage);
           setProcessing(false);
 
-          if (event.data.success) {
+          if (event.data.type === 'SUCCESS') {
             resolve(event.data.data);
           } else {
             setError(event.data.error);
@@ -63,7 +63,13 @@ export function useFlightWorker() {
 
         worker.addEventListener('message', handleMessage);
         setProcessing(true);
-        worker.postMessage({ type: 'filter', data: { flights, criteria } });
+        worker.postMessage({ 
+          type: 'FILTER', 
+          data: { 
+            flights, 
+            criteria 
+          } 
+        });
       });
     },
     [worker]
@@ -81,8 +87,8 @@ export function useFlightWorker() {
           worker.removeEventListener('message', handleMessage);
           setProcessing(false);
 
-          if (event.data.success) {
-            resolve(event.data.data);
+          if (event.data.type === 'SUCCESS' || event.data.success) {
+            resolve(event.data.data || event.data.flights);
           } else {
             setError(event.data.error);
             reject(new Error(event.data.error));
@@ -91,7 +97,14 @@ export function useFlightWorker() {
 
         worker.addEventListener('message', handleMessage);
         setProcessing(true);
-        worker.postMessage({ type: 'sort', data: { flights, field, order } });
+        worker.postMessage({ 
+          type: 'SORT', 
+          data: { 
+            flights,
+            sortField: field,
+            sortOrder: order
+          }
+        });
       });
     },
     [worker]
